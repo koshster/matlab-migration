@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+dist/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+.pnpm-store/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+postgres_data/
+
+# Build outputs (not generated contract types — those are committed for CI drift check)
+frontend/dist/

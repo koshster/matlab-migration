@@ -1,0 +1,51 @@
+openapi: "3.1.0"
+info:
+  title: Statics Platform API
+  version: "0.1.0"
+  description: >
+    API contract for the Statics Problem Platform.
+    This file is the source of truth — edit it before implementing either side.
+    Regenerate TS types with: pnpm --filter @statics/contract generate
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      tags: [health]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: "0.1.0"
+
+  # -----------------------------------------------------------------------
+  # Phase 1 will expand this file with the full contract:
+  #   - AssignmentSummary
+  #   - ProblemPayload (with geometry as unknown/opaque)
+  #   - TrussGeometry
+  #   - AnswerSchema
+  #   - CheckResult
+  #   - SubmissionResult
+  #   - All student routes (/auth/student/session, /assignments/*, etc.)
+  #   - All instructor routes (/auth/admin/*, /admin/*)
+  # -----------------------------------------------------------------------
