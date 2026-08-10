@@ -10,6 +10,13 @@ Source of truth for all decisions: `../assets/BUILD_SPEC.md`. Phases, acceptance
 - **Rushil** — owns `backend/`, co-owns `packages/contract/`
 - Phase 0 (scaffold) and Phase 1 (contract freeze) are joint; all subsequent phases are parallel.
 
+## Git workflow
+- **Never commit directly to `main`.**
+- All work happens on a feature branch: `git checkout -b feat/description` (or `fix/`, `chore/`, `test/`).
+- When the feature is done and CI passes, merge into `main`. No peer review required — the project scope is small enough that CI is the gate.
+- Keep branches short-lived and scoped to one feature or fix.
+- Conventional commit messages: `feat(frontend): ...`, `fix(backend): ...`, `test(truss): ...`, `chore(infra): ...`
+
 ## Stack
 | Layer | Tech |
 |---|---|
