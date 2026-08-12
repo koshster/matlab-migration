@@ -21,9 +21,10 @@ export default function WorkspaceLayout() {
   const [answers, setAnswers] = useState<Record<string, number | null>>({})
   const [lastCheck, setLastCheck] = useState<CheckResult | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const { data: assignment } = useAssignment(slug)
-  const { data: problem, isLoading: problemLoading } = useProblem(slug, currentIndex)
+  const { data: problem, isLoading: problemLoading, isError: problemError } = useProblem(slug, currentIndex)
   const saveMutation = useSaveAnswers(slug, currentIndex)
   const checkMutation = useCheckAnswers(slug, currentIndex)
   const submitMutation = useSubmit(slug)
@@ -76,24 +77,53 @@ export default function WorkspaceLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+          onClick={() => { setSidebarOpen(false) }}
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="hidden w-56 flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-white lg:block">
+      <aside
+        className={[
+          'fixed inset-y-0 left-0 z-30 w-56 flex-shrink-0 overflow-y-auto border-r border-gray-200 bg-white transition-transform lg:static lg:translate-x-0 lg:z-auto',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        ].join(' ')}
+        aria-label="Problem navigation"
+      >
         <ProgressList
           problems={assignment?.problems ?? []}
           currentIndex={currentIndex}
-          onNavigate={navigate_problem}
+          onNavigate={(i) => { navigate_problem(i); setSidebarOpen(false) }}
         />
       </aside>
 
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6">
-          <div>
-            <span className="text-sm font-semibold text-gray-800">
-              {session.firstName} {session.lastName}
-            </span>
-            <span className="ml-2 text-xs text-gray-400">{session.studentId}</span>
+        <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden"
+              onClick={() => { setSidebarOpen((o) => !o) }}
+              aria-label="Toggle problem list"
+              aria-expanded={sidebarOpen}
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <rect y="3" width="20" height="2" rx="1" />
+                <rect y="9" width="20" height="2" rx="1" />
+                <rect y="15" width="20" height="2" rx="1" />
+              </svg>
+            </button>
+            <div>
+              <span className="text-sm font-semibold text-gray-800">
+                {session.firstName} {session.lastName}
+              </span>
+              <span className="ml-2 text-xs text-gray-400">{session.studentId}</span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {saveStatus === 'saved' && (
@@ -112,7 +142,17 @@ export default function WorkspaceLayout() {
 
         {/* Problem area */}
         <div className="flex flex-1 overflow-hidden">
-          {problemLoading || !problem ? (
+          {problemError ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-gray-500">
+              <p className="text-sm">Failed to load problem. Check your connection.</p>
+              <button
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                onClick={() => { window.location.reload() }}
+              >
+                Reload
+              </button>
+            </div>
+          ) : problemLoading || !problem ? (
             <div className="flex flex-1 items-center justify-center">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
             </div>

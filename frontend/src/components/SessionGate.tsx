@@ -31,8 +31,7 @@ export default function SessionGate() {
           navigate(`/assignment/${DEMO_SLUG}`)
         },
         onError: (err) => {
-          const apiErr = err as { status: number }
-          if (apiErr.status === 409) {
+          if (err.status === 409) {
             navigate(`/assignment/${DEMO_SLUG}/submitted`)
           }
         },
