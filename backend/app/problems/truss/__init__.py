@@ -1,0 +1,1 @@
+"""Truss problem domain implementation."""
