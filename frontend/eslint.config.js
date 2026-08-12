@@ -24,6 +24,10 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // SVG attributes and URL construction routinely embed numbers in template literals.
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+      // Context files export both hooks and the Provider component — acceptable pattern.
+      'react-refresh/only-export-components': 'off',
     },
   },
 )

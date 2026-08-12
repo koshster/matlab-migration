@@ -1,18 +1,58 @@
-import { Routes, Route } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { SessionProvider, useOptionalSession } from './context/SessionContext'
+import SessionGate from './components/SessionGate'
 
-function HomePage() {
+const WorkspaceLayout = lazy(() => import('./components/WorkspaceLayout'))
+const SubmittedScreen = lazy(() => import('./routes/SubmittedRoute'))
+
+function RequireSession({ children }: { children: React.ReactNode }) {
+  const session = useOptionalSession()
+  if (!session) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function AppRoutes() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50">
-      <h1 className="text-4xl font-bold text-gray-900">Statics Platform</h1>
-      <p className="text-lg text-gray-500">Phase 0 scaffold — backend and frontend wiring up.</p>
-    </main>
+    <Routes>
+      <Route path="/" element={<SessionGate />} />
+      <Route
+        path="/assignment/:slug"
+        element={
+          <RequireSession>
+            <Suspense fallback={<FullPageSpinner />}>
+              <WorkspaceLayout />
+            </Suspense>
+          </RequireSession>
+        }
+      />
+      <Route
+        path="/assignment/:slug/submitted"
+        element={
+          <RequireSession>
+            <Suspense fallback={<FullPageSpinner />}>
+              <SubmittedScreen />
+            </Suspense>
+          </RequireSession>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+function FullPageSpinner() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+    </div>
   )
 }
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-    </Routes>
+    <SessionProvider>
+      <AppRoutes />
+    </SessionProvider>
   )
 }
