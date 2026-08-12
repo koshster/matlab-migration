@@ -16,7 +16,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@statics/contract": ["../packages/contract"],
+      "@statics/contract/*": ["../packages/contract/*"]
+    }
   },
   "include": ["src"]
 }
