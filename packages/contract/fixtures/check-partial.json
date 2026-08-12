@@ -1,0 +1,11 @@
+{
+  "correct": false,
+  "perField": {
+    "S1": true,
+    "S2": false,
+    "S3": false
+  },
+  "message": "2 of 3 members incorrect. Check your signs and equilibrium equations.",
+  "attemptCount": 2,
+  "problemStatus": "incorrect"
+}

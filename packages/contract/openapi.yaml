@@ -25,8 +25,197 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
+  # ---------------------------------------------------------------------------
+  # Student auth
+  # ---------------------------------------------------------------------------
+
+  /api/v1/auth/student/session:
+    post:
+      operationId: createStudentSession
+      summary: Start or restore a student session
+      tags: [student-auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentSessionRequest"
+      responses:
+        "200":
+          description: Session created or restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentSessionResponse"
+        "409":
+          description: Assignment already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlreadySubmittedError"
+
+  # ---------------------------------------------------------------------------
+  # Assignments
+  # ---------------------------------------------------------------------------
+
+  /api/v1/assignments/{slug}:
+    get:
+      operationId: getAssignment
+      summary: Get assignment summary
+      tags: [assignments]
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: Assignment summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentSummary"
+        "404":
+          description: Assignment not found
+
+  /api/v1/assignments/{slug}/problems/{index}:
+    get:
+      operationId: getProblem
+      summary: Get a problem payload for the current student
+      tags: [assignments]
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/index"
+      responses:
+        "200":
+          description: Problem payload (no solution data)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemPayload"
+        "403":
+          description: Assignment locked (already submitted)
+        "404":
+          description: Problem not found
+
+  /api/v1/assignments/{slug}/problems/{index}/answers:
+    put:
+      operationId: saveAnswers
+      summary: Save answers without checking
+      tags: [assignments]
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/index"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswersRequest"
+      responses:
+        "200":
+          description: Answers saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedResponse"
+        "403":
+          description: Assignment locked
+
+  /api/v1/assignments/{slug}/problems/{index}/check:
+    post:
+      operationId: checkAnswers
+      summary: Check answers against the solution
+      tags: [assignments]
+      parameters:
+        - $ref: "#/components/parameters/slug"
+        - $ref: "#/components/parameters/index"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswersRequest"
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckResult"
+        "403":
+          description: Assignment locked or max attempts reached
+        "404":
+          description: Problem not found
+
+  /api/v1/assignments/{slug}/submit:
+    post:
+      operationId: submitAssignment
+      summary: Finalize and submit the assignment
+      tags: [assignments]
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: Submission result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResult"
+        "409":
+          description: Already submitted (idempotent — returns same result)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResult"
+
+  /api/v1/assignments/{slug}/result:
+    get:
+      operationId: getResult
+      summary: Get submission result (only available after submit)
+      tags: [assignments]
+      parameters:
+        - $ref: "#/components/parameters/slug"
+      responses:
+        "200":
+          description: Submission result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResult"
+        "404":
+          description: Not yet submitted
+
+# =============================================================================
+# Parameters
+# =============================================================================
+
 components:
+  parameters:
+    slug:
+      name: slug
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Assignment slug (e.g. "truss-fall-2026")
+
+    index:
+      name: index
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: 1-based problem index within the assignment
+
+  # ===========================================================================
+  # Schemas
+  # ===========================================================================
+
   schemas:
+
+    # -------------------------------------------------------------------------
+    # Health
+    # -------------------------------------------------------------------------
+
     HealthResponse:
       type: object
       required: [status, version]
@@ -38,14 +227,376 @@ components:
           type: string
           example: "0.1.0"
 
-  # -----------------------------------------------------------------------
-  # Phase 1 will expand this file with the full contract:
-  #   - AssignmentSummary
-  #   - ProblemPayload (with geometry as unknown/opaque)
-  #   - TrussGeometry
-  #   - AnswerSchema
-  #   - CheckResult
-  #   - SubmissionResult
-  #   - All student routes (/auth/student/session, /assignments/*, etc.)
-  #   - All instructor routes (/auth/admin/*, /admin/*)
-  # -----------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Student auth
+    # -------------------------------------------------------------------------
+
+    StudentSessionRequest:
+      type: object
+      required: [externalId, firstName, lastName, assignmentSlug]
+      properties:
+        externalId:
+          type: string
+          description: Student PID (never appears in URLs or logs)
+          example: A12345678
+        firstName:
+          type: string
+          example: Koshik
+        lastName:
+          type: string
+          example: Kumar
+        assignmentSlug:
+          type: string
+          example: truss-fall-2026
+
+    StudentSessionResponse:
+      type: object
+      required: [student, assignment]
+      properties:
+        student:
+          type: object
+          required: [id, firstName, lastName]
+          properties:
+            id:
+              type: string
+              format: uuid
+            firstName:
+              type: string
+            lastName:
+              type: string
+        assignment:
+          $ref: "#/components/schemas/AssignmentSummary"
+
+    AlreadySubmittedError:
+      type: object
+      required: [code, submittedAt, score, total]
+      properties:
+        code:
+          type: string
+          enum: [ALREADY_SUBMITTED]
+        submittedAt:
+          type: string
+          format: date-time
+        score:
+          type: number
+        total:
+          type: number
+
+    # -------------------------------------------------------------------------
+    # Assignment
+    # -------------------------------------------------------------------------
+
+    AssignmentSummary:
+      type: object
+      required: [slug, title, problemCount, status, feedbackMode, maxAttempts, dueAt, locked, problems]
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        problemCount:
+          type: integer
+        status:
+          type: string
+          enum: [not_started, in_progress, submitted]
+        feedbackMode:
+          type: string
+          enum: [binary, per_field]
+        maxAttempts:
+          type: integer
+          nullable: true
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        locked:
+          type: boolean
+          description: True once submitted or past a hard close
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblemSummary"
+        score:
+          type: object
+          nullable: true
+          required: [earned, total]
+          properties:
+            earned:
+              type: number
+            total:
+              type: number
+
+    ProblemSummary:
+      type: object
+      required: [index, status, attemptCount]
+      properties:
+        index:
+          type: integer
+        status:
+          type: string
+          enum: [no_attempt, incorrect, correct]
+        attemptCount:
+          type: integer
+
+    # -------------------------------------------------------------------------
+    # Problem payload
+    # -------------------------------------------------------------------------
+
+    ProblemPayload:
+      type: object
+      required: [schemaVersion, index, problemType, prompt, geometry, answerSchema, savedAnswers, attemptCount, maxAttempts, locked]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+        index:
+          type: integer
+        problemType:
+          type: string
+          description: Drives the renderer registry (e.g. "truss")
+        prompt:
+          $ref: "#/components/schemas/Prompt"
+        geometry:
+          description: Opaque to the shell — typed per problemType by the renderer
+        answerSchema:
+          $ref: "#/components/schemas/AnswerSchema"
+        savedAnswers:
+          type: object
+          additionalProperties:
+            type: number
+            nullable: true
+        attemptCount:
+          type: integer
+        maxAttempts:
+          type: integer
+          nullable: true
+        locked:
+          type: boolean
+
+    Prompt:
+      type: object
+      required: [title, body, notes]
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        notes:
+          type: array
+          items:
+            type: string
+
+    AnswerSchema:
+      type: object
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnswerGroup"
+
+    AnswerGroup:
+      type: object
+      required: [id, label, fields]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnswerField"
+
+    AnswerField:
+      type: object
+      required: [key, label, type, decimals]
+      properties:
+        key:
+          type: string
+          description: Matches keys in savedAnswers and CheckResult.perField
+        label:
+          type: string
+          description: Rendered label (e.g. "S₁")
+        unit:
+          type: string
+          nullable: true
+          example: F
+        type:
+          type: string
+          enum: [number]
+        decimals:
+          type: integer
+          nullable: true
+          example: 2
+
+    # -------------------------------------------------------------------------
+    # TrussGeometry — concrete geometry type for problemType="truss"
+    # (geometry field in ProblemPayload is opaque; this is the resolved shape)
+    # -------------------------------------------------------------------------
+
+    TrussGeometry:
+      type: object
+      required: [schemaVersion, nodes, members, supports, forces, bounds]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrussNode"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrussMember"
+        supports:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrussSupport"
+        forces:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrussForce"
+        bounds:
+          $ref: "#/components/schemas/TrussBounds"
+
+    TrussNode:
+      type: object
+      required: [id, x, y]
+      properties:
+        id:
+          type: integer
+        x:
+          type: number
+        y:
+          type: number
+
+    TrussMember:
+      type: object
+      required: [id, from, to, label]
+      properties:
+        id:
+          type: integer
+        from:
+          type: integer
+          description: Node id
+        to:
+          type: integer
+          description: Node id
+        label:
+          type: string
+          example: "S₁"
+
+    TrussSupport:
+      type: object
+      required: [node, type, angleDeg]
+      properties:
+        node:
+          type: integer
+          description: Node id
+        type:
+          type: string
+          enum: [pin, roller]
+        angleDeg:
+          type: number
+          description: Rotation of support symbol in degrees (0 = base below node)
+
+    TrussForce:
+      type: object
+      required: [node, fx, fy, label]
+      properties:
+        node:
+          type: integer
+          description: Node id
+        fx:
+          type: number
+        fy:
+          type: number
+        label:
+          type: string
+          example: "3F"
+
+    TrussBounds:
+      type: object
+      required: [xMin, xMax, yMin, yMax]
+      properties:
+        xMin:
+          type: number
+        xMax:
+          type: number
+        yMin:
+          type: number
+        yMax:
+          type: number
+
+    # -------------------------------------------------------------------------
+    # Check + submission
+    # -------------------------------------------------------------------------
+
+    AnswersRequest:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: object
+          additionalProperties:
+            type: number
+            nullable: true
+
+    SavedResponse:
+      type: object
+      required: [savedAt]
+      properties:
+        savedAt:
+          type: string
+          format: date-time
+
+    CheckResult:
+      type: object
+      required: [correct, perField, message, attemptCount, problemStatus]
+      properties:
+        correct:
+          type: boolean
+        perField:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: boolean
+          description: null when feedbackMode is binary
+        message:
+          type: string
+        attemptCount:
+          type: integer
+        problemStatus:
+          type: string
+          enum: [no_attempt, incorrect, correct]
+
+    SubmissionResult:
+      type: object
+      required: [submittedAt, score, problems]
+      properties:
+        submittedAt:
+          type: string
+          format: date-time
+        score:
+          type: object
+          required: [earned, total]
+          properties:
+            earned:
+              type: number
+            total:
+              type: number
+        problems:
+          type: array
+          items:
+            type: object
+            required: [index, status, points]
+            properties:
+              index:
+                type: integer
+              status:
+                type: string
+                enum: [no_attempt, incorrect, correct]
+              points:
+                type: number

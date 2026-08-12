@@ -1,0 +1,17 @@
+{
+  "submittedAt": "2026-12-15T22:14:33Z",
+  "score": {
+    "earned": 6,
+    "total": 8
+  },
+  "problems": [
+    { "index": 1, "status": "correct",    "points": 1 },
+    { "index": 2, "status": "correct",    "points": 1 },
+    { "index": 3, "status": "incorrect",  "points": 0 },
+    { "index": 4, "status": "correct",    "points": 1 },
+    { "index": 5, "status": "correct",    "points": 1 },
+    { "index": 6, "status": "no_attempt", "points": 0 },
+    { "index": 7, "status": "correct",    "points": 1 },
+    { "index": 8, "status": "correct",    "points": 1 }
+  ]
+}
