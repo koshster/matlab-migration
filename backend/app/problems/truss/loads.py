@@ -26,9 +26,16 @@ def generate_loads(
     load_node_idx = rng.choice(available_nodes)
     pos = node_coords[load_node_idx].tolist()
 
-    # Generate random force magnitude & direction
-    mag = rng.uniform(1.0, max_magnitude)
-    fy = -round(float(mag), 1)  # Downward vertical load
-    fx = 0.0
+    # Generate random whole integer force magnitude (1 to max_magnitude, matching MATLAB randi)
+    mag = float(rng.integers(1, int(max_magnitude) + 1))
+    
+    # 50% vertical (up or down), 50% horizontal (left or right)
+    if rng.random() <= 0.5:
+        fy = -mag if rng.random() < 0.8 else mag  # Prefer downward loads on trusses
+        fx = 0.0
+    else:
+        fx = -mag if rng.random() < 0.5 else mag
+        fy = 0.0
 
     return [{"F": [fx, fy], "P": pos, "node_index": int(load_node_idx)}]
+

@@ -74,8 +74,9 @@ def generate_truss_geometry(
             offset = rng.choice([-1, 0, 1], size=2)
             if np.all(offset == 0):
                 offset = np.array([1, 0])
-            candidate = base_node + offset + rng.normal(0, 0.1, size=2)
-            candidate = np.round(candidate, decimals=1)
+            candidate = base_node + offset
+            candidate = np.round(candidate).astype(float)
+
 
             # Check if duplicate node
             if np.any(np.all(np.isclose(nodes, candidate), axis=1)):

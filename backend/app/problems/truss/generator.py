@@ -29,7 +29,9 @@ class TrussGenerator:
         rng = np.random.default_rng(seed)
         node_count_schedule = [3, 3, 4, 4, 5, 5, 6, 6]
         problem_id = (params or {}).get("problem_id", 1)
-        n_nodes = node_count_schedule[min(max(problem_id - 1, 0), len(node_count_schedule) - 1)]
+        default_n = node_count_schedule[min(max(problem_id - 1, 0), len(node_count_schedule) - 1)]
+        n_nodes = (params or {}).get("num_nodes", default_n)
+
 
         node_coords, members, _ = generate_truss_geometry(n_nodes, rng)
         pins, rollers = generate_supports(node_coords, rng)

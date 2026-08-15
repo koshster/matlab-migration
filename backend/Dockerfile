@@ -1,7 +1,9 @@
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
+
 
 WORKDIR /app
 
@@ -11,9 +13,10 @@ RUN pip install uv
 FROM base AS dev
 
 COPY pyproject.toml .
-RUN uv sync --all-extras
+RUN uv sync --all-extras --no-install-project
 
 COPY . .
+RUN uv sync --all-extras
 
 EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -24,9 +27,11 @@ FROM base AS prod
 RUN addgroup --system app && adduser --system --ingroup app app
 
 COPY pyproject.toml .
-RUN uv sync --no-dev
+RUN uv sync --no-dev --no-install-project
 
 COPY . .
+RUN uv sync --no-dev
+
 
 RUN chown -R app:app /app
 USER app
