@@ -35,3 +35,4 @@ frontend/dist/
 # Other
 *.pdf
 artifacts/
+backend/AGENTS.md
