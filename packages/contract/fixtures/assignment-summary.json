@@ -1,0 +1,21 @@
+{
+  "slug": "truss-fall-2026",
+  "title": "Truss Analysis — Fall 2026",
+  "problemCount": 8,
+  "status": "in_progress",
+  "feedbackMode": "per_field",
+  "maxAttempts": null,
+  "dueAt": "2026-12-15T23:59:00Z",
+  "locked": false,
+  "problems": [
+    { "index": 1, "status": "correct",    "attemptCount": 2 },
+    { "index": 2, "status": "incorrect",  "attemptCount": 1 },
+    { "index": 3, "status": "no_attempt", "attemptCount": 0 },
+    { "index": 4, "status": "no_attempt", "attemptCount": 0 },
+    { "index": 5, "status": "no_attempt", "attemptCount": 0 },
+    { "index": 6, "status": "no_attempt", "attemptCount": 0 },
+    { "index": 7, "status": "no_attempt", "attemptCount": 0 },
+    { "index": 8, "status": "no_attempt", "attemptCount": 0 }
+  ],
+  "score": null
+}

@@ -5,6 +5,13 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 
+async function enableMocking() {
+  if (import.meta.env.DEV) {
+    const { worker } = await import('./mocks/browser')
+    return worker.start({ onUnhandledRequest: 'warn' })
+  }
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -17,12 +24,14 @@ const queryClient = new QueryClient({
 const rootEl = document.getElementById('root')
 if (!rootEl) throw new Error('Root element not found')
 
-createRoot(rootEl).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
-)
+void enableMocking().then(() => {
+  createRoot(rootEl).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  )
+})

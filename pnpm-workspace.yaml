@@ -1,3 +1,7 @@
 packages:
   - 'frontend'
   - 'packages/*'
+
+allowBuilds:
+  esbuild: true
+  msw: true

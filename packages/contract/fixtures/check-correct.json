@@ -1,0 +1,11 @@
+{
+  "correct": true,
+  "perField": {
+    "S1": true,
+    "S2": true,
+    "S3": true
+  },
+  "message": "All members correct. Great work!",
+  "attemptCount": 1,
+  "problemStatus": "correct"
+}
