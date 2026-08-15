@@ -39,16 +39,20 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: ./frontend/Dockerfile
       target: dev
     restart: unless-stopped
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app/frontend
+      - ./packages:/app/packages
       - /app/node_modules
+      - /app/frontend/node_modules
     environment:
       VITE_API_BASE_URL: http://localhost:8000
+
 
 volumes:
   postgres_data:
