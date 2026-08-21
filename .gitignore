@@ -31,3 +31,8 @@ postgres_data/
 
 # Build outputs (not generated contract types — those are committed for CI drift check)
 frontend/dist/
+
+# Other
+*.pdf
+artifacts/
+backend/AGENTS.md
