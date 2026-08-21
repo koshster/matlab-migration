@@ -1,4 +1,3 @@
-from typing import Dict
 from app.problems.base import ProblemGeneratorProtocol
 
 
@@ -6,7 +5,7 @@ class ProblemRegistry:
     """Registry pattern implementation for registering and retrieving problem type generators."""
 
     def __init__(self) -> None:
-        self._generators: Dict[str, ProblemGeneratorProtocol] = {}
+        self._generators: dict[str, ProblemGeneratorProtocol] = {}
 
     def register(self, generator: ProblemGeneratorProtocol) -> None:
         """Register a problem domain generator instance.

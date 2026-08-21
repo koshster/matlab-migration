@@ -1,4 +1,5 @@
 from typing import Any, Protocol, runtime_checkable
+
 from pydantic import BaseModel, Field
 
 
@@ -7,11 +8,11 @@ class VisualElementSchema(BaseModel):
 
     element_type: str = Field(
         ...,
-        description="Type of graphic primitive (e.g., node, member, pin, roller, point_load, moment, dimension)",
+        description=("Type of graphic primitive (e.g. node, member, pin, roller, load, moment)"),
     )
     properties: dict[str, Any] = Field(
         default_factory=dict,
-        description="Key-value properties describing coordinates, magnitudes, vectors, labels, or styles",
+        description="Properties describing coordinates, magnitudes, vectors, labels, or styles",
     )
 
 
@@ -19,24 +20,26 @@ class AnswerFieldSpec(BaseModel):
     """Specification for a single input field in the student answer form."""
 
     field_id: str = Field(
-        ..., description="Unique key for the answer field (e.g. member_1_2, reaction_Ax)"
+        ..., description="Unique key for answer field (e.g. member_1_2, reaction_Ax)"
     )
     label: str = Field(..., description="Human readable label displayed to the student")
-    unit: str = Field(default="", description="Units associated with the value (e.g. kN, N-m, m)")
+    unit: str = Field(default="", description="Units of value (e.g. kN, N-m, m)")
     value_type: str = Field(
         default="numeric",
         description="Data type of input (e.g., 'numeric', 'enum', 'text')",
     )
     options: list[str] | None = Field(
         default=None,
-        description="Selectable enum options if value_type is 'enum' (e.g. ['Tension', 'Compression', 'Zero'])",
+        description="Selectable enum options (e.g. ['Tension', 'Compression', 'Zero'])",
     )
 
 
 class ProblemDisplayData(BaseModel):
     """Public problem specification sent to the client (NO solution data)."""
 
-    problem_type: str = Field(..., description="Domain identifier (e.g. truss, frame_2d, rigid_body)")
+    problem_type: str = Field(
+        ..., description="Domain identifier (e.g. truss, frame_2d, rigid_body)"
+    )
     seed: int = Field(..., description="RNG seed used to synthesize geometry")
     title: str = Field(..., description="Problem title")
     instructions: str = Field(..., description="Problem prompt and student instructions")
@@ -59,7 +62,9 @@ class AnswerSubmission(BaseModel):
 class FieldResult(BaseModel):
     """Evaluation result for a single student answer field."""
 
-    is_correct: bool = Field(..., description="Whether the field value is within acceptable tolerance")
+    is_correct: bool = Field(
+        ..., description="Whether the field value is within acceptable tolerance"
+    )
     submitted: Any = Field(default=None, description="Value submitted by student")
     delta: float | None = Field(default=None, description="Absolute error delta if numeric")
     message: str | None = Field(default=None, description="Optional feedback or hint message")
@@ -77,23 +82,19 @@ class GradingResult(BaseModel):
 
 @runtime_checkable
 class ProblemGeneratorProtocol(Protocol):
-    """Unified interface required for any statics problem backend plugin (Truss, Rigid Body, Frame, etc.)."""
+    """Unified interface required for any statics problem backend plugin."""
 
     @property
     def problem_type(self) -> str:
         """Unique problem domain identifier string."""
         ...
 
-    def generate(
-        self, seed: int, params: dict[str, Any] | None = None
-    ) -> ProblemDisplayData:
+    def generate(self, seed: int, params: dict[str, Any] | None = None) -> ProblemDisplayData:
         """Synthesize problem geometry and display schema from seed. NEVER return solution data."""
         ...
 
-    def solve(
-        self, seed: int, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        """Server-side solver for ground-truth reactions, member forces, or state. Internal use only."""
+    def solve(self, seed: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Server-side solver for ground-truth reactions or forces. Internal use only."""
         ...
 
     def check(

@@ -1,4 +1,5 @@
 from typing import Any
+
 import numpy as np
 
 
@@ -23,7 +24,7 @@ def get_outward_rotation(node_pos: np.ndarray, centroid: np.ndarray) -> int:
 def generate_supports(
     node_coords: np.ndarray, rng: np.random.Generator, max_attempts: int = 50
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Randomly generate fixed pin and roller supports for boundary nodes (matching MATLAB genPinTypeSupports).
+    """Randomly generate fixed pin and roller supports for boundary nodes.
 
     Ensures:
     1. Supports are placed on distinct exterior/boundary joints.
@@ -46,26 +47,19 @@ def generate_supports(
         roller_rot = get_outward_rotation(p2, centroid)
 
         # Validate static determinacy (genEliminate check):
-        # If roller is vertical (0 or 180), pin.x and roller.x must not be collinear
-        # If roller is horizontal (90 or 270), pin.y and roller.y must not be collinear
-        if roller_rot in (0, 180) and not np.isclose(p1[0], p2[0], atol=1e-3):
+        # If vertical (0 or 180), pin.x and roller.x must not be collinear
+        # If horizontal (90 or 270), pin.y and roller.y must not be collinear
+        is_vert_valid = roller_rot in (0, 180) and not np.isclose(p1[0], p2[0], atol=1e-3)
+        is_horiz_valid = roller_rot in (90, 270) and not np.isclose(p1[1], p2[1], atol=1e-3)
+
+        if is_vert_valid or is_horiz_valid:
             pin_supports = [{"r": p1.tolist(), "node_index": pin_idx}]
-            roller_supports = [
-                {"r": p2.tolist(), "node_index": roller_idx, "rotation": roller_rot}
-            ]
-            return pin_supports, roller_supports
-        elif roller_rot in (90, 270) and not np.isclose(p1[1], p2[1], atol=1e-3):
-            pin_supports = [{"r": p1.tolist(), "node_index": pin_idx}]
-            roller_supports = [
-                {"r": p2.tolist(), "node_index": roller_idx, "rotation": roller_rot}
-            ]
+            roller_supports = [{"r": p2.tolist(), "node_index": roller_idx, "rotation": roller_rot}]
             return pin_supports, roller_supports
 
     # Fallback to bottom-most horizontally separated nodes
     lowest_y = float(np.min(node_coords[:, 1]))
-    bottom_nodes = [
-        i for i in range(n_nodes) if np.isclose(node_coords[i, 1], lowest_y, atol=1e-3)
-    ]
+    bottom_nodes = [i for i in range(n_nodes) if np.isclose(node_coords[i, 1], lowest_y, atol=1e-3)]
     if len(bottom_nodes) >= 2:
         sorted_bottom = sorted(bottom_nodes, key=lambda idx: float(node_coords[idx, 0]))
         sup_1, sup_2 = sorted_bottom[0], sorted_bottom[-1]
@@ -86,5 +80,3 @@ def generate_supports(
         [{"r": p1.tolist(), "node_index": int(sup_1)}],
         [{"r": p2.tolist(), "node_index": int(sup_2), "rotation": roller_rot}],
     )
-
-

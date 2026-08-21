@@ -1,4 +1,5 @@
 from typing import Any
+
 import numpy as np
 
 
@@ -44,7 +45,7 @@ def solve_support_reactions(
             roller_x_coeff, roller_y_coeff = 0.0, 1.0
             roller_name = "By"
 
-        A = np.array(
+        a_mat = np.array(
             [
                 [1.0, 0.0, roller_x_coeff],
                 [0.0, 1.0, roller_y_coeff],
@@ -57,7 +58,7 @@ def solve_support_reactions(
             dtype=float,
         )
 
-        res = np.linalg.solve(A, b)
+        res = np.linalg.solve(a_mat, b)
         return {
             "Ax": float(res[0]),
             "Ay": float(res[1]),
@@ -77,8 +78,9 @@ def solve_member_forces(
     roller_supports: list[dict[str, Any]],
     forces: list[dict[str, Any]],
 ) -> np.ndarray:
-    """Solve for internal member forces in a 2D planar truss using joint equilibrium matrix A * s = b.
+    """Solve for internal member forces in a 2D planar truss using joint equilibrium.
 
+    Uses equilibrium matrix A * s = b.
     Returns array of member axial forces S (S > 0: Tension, S < 0: Compression).
     """
     n_nodes = len(node_coords)
@@ -119,7 +121,7 @@ def solve_member_forces(
         external_y[node_idx] += fy
 
     # 3. Build joint equilibrium matrix (2 * n_nodes equations)
-    A = np.zeros((2 * n_nodes, n_members))
+    a_mat = np.zeros((2 * n_nodes, n_members))
     b = np.zeros(2 * n_nodes)
 
     member_con: list[list[int]] = [[] for _ in range(n_nodes)]
@@ -138,7 +140,7 @@ def solve_member_forces(
                     unit_dir = (pos_b - pos_a) / np.linalg.norm(pos_b - pos_a)
                 else:
                     unit_dir = (pos_a - pos_b) / np.linalg.norm(pos_a - pos_b)
-                A[eqn, mem_idx] = unit_dir[dim]
+                a_mat[eqn, mem_idx] = unit_dir[dim]
 
             b[eqn] = -(
                 support_x[joint] + external_x[joint]
@@ -148,12 +150,12 @@ def solve_member_forces(
             eqn += 1
 
     # Filter zero rows (unconstrained nodes with no unknowns)
-    row_sums = np.sum(np.abs(A), axis=1)
+    row_sums = np.sum(np.abs(a_mat), axis=1)
     keep_rows = row_sums > 1e-5
 
-    A_filtered = A[keep_rows]
+    a_filtered = a_mat[keep_rows]
     b_filtered = b[keep_rows]
 
     # Solve linear system using least squares / solve
-    s_forces, _, _, _ = np.linalg.lstsq(A_filtered, b_filtered, rcond=None)
+    s_forces, _, _, _ = np.linalg.lstsq(a_filtered, b_filtered, rcond=None)
     return s_forces

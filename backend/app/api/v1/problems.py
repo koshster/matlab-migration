@@ -1,16 +1,16 @@
-from typing import Any
 import random
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+import app.problems  # noqa: F401
 from app.problems.base import (
     AnswerSubmission,
     GradingResult,
     ProblemDisplayData,
 )
 from app.problems.registry import problem_registry
-import app.problems  # noqa: F401
-
 
 router = APIRouter(prefix="/problems", tags=["problems"])
 
@@ -19,7 +19,8 @@ class GenerateProblemRequest(BaseModel):
     """Request payload to synthesize a problem instance."""
 
     seed: int | None = Field(
-        default=None, description="Optional integer seed; if omitted, a random seed is chosen"
+        default=None,
+        description="Optional integer seed; if omitted, a random seed is chosen",
     )
     params: dict[str, Any] | None = Field(
         default=None, description="Optional problem configuration parameters"
@@ -34,7 +35,8 @@ class CheckAnswerRequest(BaseModel):
         ..., description="Dictionary mapping field_id to submitted value"
     )
     tolerance: float = Field(
-        default=0.01, description="Acceptable relative grading tolerance (default: 0.01 = 1%)"
+        default=0.01,
+        description="Acceptable relative grading tolerance (default: 0.01 = 1%)",
     )
 
 
@@ -52,13 +54,16 @@ async def list_problem_types() -> dict[str, list[str]]:
 async def generate_problem(
     problem_type: str, request: GenerateProblemRequest | None = None
 ) -> ProblemDisplayData:
-    """Generate problem visual elements and form input fields from seed without exposing solutions."""
+    """Generate problem visual elements and form input fields without exposing solutions."""
     try:
         generator = problem_registry.get(problem_type)
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Problem type '{problem_type}' not found. Available types: {problem_registry.list_types()}",
+            detail=(
+                f"Problem type '{problem_type}' not found. "
+                f"Available types: {problem_registry.list_types()}"
+            ),
         ) from exc
 
     seed = request.seed if (request and request.seed is not None) else random.randint(1, 1_000_000)
@@ -72,10 +77,8 @@ async def generate_problem(
     response_model=GradingResult,
     summary="Evaluate student answers against ground truth",
 )
-async def check_problem_answer(
-    problem_type: str, request: CheckAnswerRequest
-) -> GradingResult:
-    """Statelessly solve the problem server-side using the seed and grade the student's submission."""
+async def check_problem_answer(problem_type: str, request: CheckAnswerRequest) -> GradingResult:
+    """Statelessly solve problem server-side using the seed and grade student submission."""
     try:
         generator = problem_registry.get(problem_type)
     except KeyError as exc:
@@ -85,6 +88,4 @@ async def check_problem_answer(
         ) from exc
 
     submission = AnswerSubmission(answers=request.answers)
-    return generator.check(
-        seed=request.seed, submission=submission, tolerance=request.tolerance
-    )
+    return generator.check(seed=request.seed, submission=submission, tolerance=request.tolerance)

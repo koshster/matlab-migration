@@ -1,4 +1,3 @@
-from typing import Any
 import numpy as np
 from scipy.spatial import Delaunay
 
@@ -60,7 +59,7 @@ def generate_truss_geometry(
         np.array([[0, 0], [-1, 0], [-1, -1]]),
     ]
 
-    for attempt in range(max_attempts):
+    for _attempt in range(max_attempts):
         cfg_idx = rng.integers(0, len(starting_configs))
         nodes = starting_configs[cfg_idx].copy().astype(float)
 
@@ -76,7 +75,6 @@ def generate_truss_geometry(
                 offset = np.array([1, 0])
             candidate = base_node + offset
             candidate = np.round(candidate).astype(float)
-
 
             # Check if duplicate node
             if np.any(np.all(np.isclose(nodes, candidate), axis=1)):

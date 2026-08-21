@@ -1,4 +1,5 @@
 from typing import Any
+
 import numpy as np
 
 
@@ -28,7 +29,7 @@ def generate_loads(
 
     # Generate random whole integer force magnitude (1 to max_magnitude, matching MATLAB randi)
     mag = float(rng.integers(1, int(max_magnitude) + 1))
-    
+
     # 50% vertical (up or down), 50% horizontal (left or right)
     if rng.random() <= 0.5:
         fy = -mag if rng.random() < 0.8 else mag  # Prefer downward loads on trusses
@@ -38,4 +39,3 @@ def generate_loads(
         fy = 0.0
 
     return [{"F": [fx, fy], "P": pos, "node_index": int(load_node_idx)}]
-

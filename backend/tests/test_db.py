@@ -1,6 +1,9 @@
-import uuid
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.db.models import (
     Assignment,
@@ -22,9 +25,7 @@ async def async_test_session():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
         yield session
 
@@ -32,7 +33,9 @@ async def async_test_session():
 
 
 @pytest.mark.asyncio
-async def test_full_course_and_assignment_lifecycle(async_test_session: AsyncSession):
+async def test_full_course_and_assignment_lifecycle(
+    async_test_session: AsyncSession,
+) -> None:
     session = async_test_session
 
     # 1. Create Instructor

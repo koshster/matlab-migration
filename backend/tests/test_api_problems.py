@@ -20,9 +20,7 @@ async def test_list_problem_types():
 async def test_generate_truss_api():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/api/v1/problems/truss/generate", json={"seed": 42}
-        )
+        response = await client.post("/api/v1/problems/truss/generate", json={"seed": 42})
         assert response.status_code == 200
         data = response.json()
         assert data["problem_type"] == "truss"

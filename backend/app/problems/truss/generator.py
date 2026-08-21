@@ -1,4 +1,5 @@
 from typing import Any
+
 import numpy as np
 
 from app.problems.base import (
@@ -25,13 +26,18 @@ class TrussGenerator:
 
     def _build_truss_instance(
         self, seed: int, params: dict[str, Any] | None = None
-    ) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[
+        np.ndarray,
+        np.ndarray,
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
         rng = np.random.default_rng(seed)
         node_count_schedule = [3, 3, 4, 4, 5, 5, 6, 6]
         problem_id = (params or {}).get("problem_id", 1)
         default_n = node_count_schedule[min(max(problem_id - 1, 0), len(node_count_schedule) - 1)]
         n_nodes = (params or {}).get("num_nodes", default_n)
-
 
         node_coords, members, _ = generate_truss_geometry(n_nodes, rng)
         pins, rollers = generate_supports(node_coords, rng)
@@ -39,9 +45,7 @@ class TrussGenerator:
 
         return node_coords, members, pins, rollers, forces
 
-    def generate(
-        self, seed: int, params: dict[str, Any] | None = None
-    ) -> ProblemDisplayData:
+    def generate(self, seed: int, params: dict[str, Any] | None = None) -> ProblemDisplayData:
         """Synthesize problem geometry and display schema. NEVER return solution data."""
         node_coords, members, pins, rollers, forces = self._build_truss_instance(seed, params)
 
@@ -57,7 +61,7 @@ class TrussGenerator:
             )
 
         # Members
-        for m_idx, (start, end) in enumerate(members):
+        for _m_idx, (start, end) in enumerate(members):
             visual_schema.append(
                 VisualElementSchema(
                     element_type="member",
@@ -105,12 +109,12 @@ class TrussGenerator:
 
         # Answer Schema (Student Input Fields)
         answer_schema: list[AnswerFieldSpec] = []
-        for m_idx, (start, end) in enumerate(members):
+        for _m_idx, (start, end) in enumerate(members):
             field_id = f"member_{start}_{end}"
             answer_schema.append(
                 AnswerFieldSpec(
                     field_id=field_id,
-                    label=f"Force in Member ({start+1}-{end+1})",
+                    label=f"Force in Member ({start + 1}-{end + 1})",
                     unit="kN",
                     value_type="numeric",
                 )
@@ -118,7 +122,7 @@ class TrussGenerator:
             answer_schema.append(
                 AnswerFieldSpec(
                     field_id=f"{field_id}_state",
-                    label=f"State of Member ({start+1}-{end+1})",
+                    label=f"State of Member ({start + 1}-{end + 1})",
                     unit="",
                     value_type="enum",
                     options=["Tension", "Compression", "Zero"],
@@ -129,20 +133,19 @@ class TrussGenerator:
             problem_type=self.problem_type,
             seed=seed,
             title="2D Planar Truss Analysis",
-            instructions="Determine the reaction forces at supports and internal axial force in each truss member.",
+            instructions=(
+                "Determine the reaction forces at supports "
+                "and internal axial force in each truss member."
+            ),
             visual_schema=visual_schema,
             answer_schema=answer_schema,
         )
 
-    def solve(
-        self, seed: int, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    def solve(self, seed: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Server-side solver for ground truth reactions and member forces."""
         node_coords, members, pins, rollers, forces = self._build_truss_instance(seed, params)
         reactions = solve_support_reactions(pins, rollers, forces)
-        member_forces = solve_member_forces(
-            node_coords, members, reactions, pins, rollers, forces
-        )
+        member_forces = solve_member_forces(node_coords, members, reactions, pins, rollers, forces)
 
         member_solutions = {}
         for m_idx, (start, end) in enumerate(members):
