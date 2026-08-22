@@ -62,4 +62,98 @@ export const handlers = [
   http.get(`${BASE}/assignments/:slug/result`, () => {
     return HttpResponse.json(submissionResult)
   }),
+
+  // Instructor login — any password works in dev
+  http.post(`${BASE}/auth/instructor/login`, async ({ request }) => {
+    const body = await request.json() as { email?: string }
+    return HttpResponse.json({
+      instructor: {
+        id: 'mock-instructor-uuid',
+        email: body.email ?? 'marko@university.edu',
+        name: 'Prof. Marko',
+      },
+    })
+  }),
+
+  // Instructor register — 409 if email contains "taken"
+  http.post(`${BASE}/auth/instructor/register`, async ({ request }) => {
+    const body = await request.json() as { name?: string; email?: string }
+    if (body.email?.includes('taken')) {
+      return HttpResponse.json({ detail: 'Email already registered' }, { status: 409 })
+    }
+    return HttpResponse.json(
+      {
+        instructor: {
+          id: 'mock-instructor-uuid',
+          email: body.email ?? 'new@university.edu',
+          name: body.name ?? 'New Instructor',
+        },
+      },
+      { status: 201 },
+    )
+  }),
+
+  // Instructor logout
+  http.post(`${BASE}/auth/instructor/logout`, () => {
+    return HttpResponse.json({ ok: true })
+  }),
+
+  // Student login — any password works; 401 if pid === 'invalid'
+  http.post(`${BASE}/auth/student/login`, async ({ request }) => {
+    const body = await request.json() as { pid?: string }
+    if (body.pid === 'invalid') {
+      return HttpResponse.json({ detail: 'Invalid credentials' }, { status: 401 })
+    }
+    return HttpResponse.json({
+      student: { id: 'mock-student-uuid', firstName: 'Demo', lastName: 'Student' },
+    })
+  }),
+
+  // Student register — 409 if pid contains 'taken'
+  http.post(`${BASE}/auth/student/register`, async ({ request }) => {
+    const body = await request.json() as { pid?: string; firstName?: string; lastName?: string }
+    if (body.pid?.includes('taken')) {
+      return HttpResponse.json({ detail: 'PID already registered' }, { status: 409 })
+    }
+    return HttpResponse.json(
+      {
+        student: {
+          id: 'mock-student-uuid',
+          firstName: body.firstName ?? 'Demo',
+          lastName: body.lastName ?? 'Student',
+        },
+      },
+      { status: 201 },
+    )
+  }),
+
+  // Student assignment list (dashboard) — three assignments across all status states
+  http.get(`${BASE}/student/assignments`, () => {
+    return HttpResponse.json([
+      {
+        slug: 'truss-fall-2026',
+        title: 'Truss Analysis — Fall 2026',
+        status: 'in_progress',
+        score: null,
+        dueAt: '2026-12-15T23:59:00Z',
+        problemCount: 8,
+      },
+      {
+        slug: 'truss-quiz-week8',
+        title: 'Truss Review Quiz — Week 8',
+        status: 'not_started',
+        score: null,
+        dueAt: '2026-10-30T23:59:00Z',
+        problemCount: 8,
+      },
+      {
+        slug: 'truss-practice-final',
+        title: 'Final Exam Practice',
+        status: 'submitted',
+        score: { earned: 6, total: 8 },
+        dueAt: null,
+        problemCount: 8,
+      },
+    ])
+  }),
 ]

@@ -24,7 +24,7 @@ const keys = {
 }
 
 // ---------------------------------------------------------------------------
-// Student session
+// Student session (legacy — kept for MSW compatibility)
 // ---------------------------------------------------------------------------
 export function useStudentSession() {
   return useMutation<StudentSessionResponse, ApiError, StudentSessionRequest>({
@@ -33,6 +33,60 @@ export function useStudentSession() {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Student auth (new secure endpoints)
+// ---------------------------------------------------------------------------
+
+interface StudentRecord {
+  id: string
+  firstName: string
+  lastName: string
+}
+
+interface StudentAuthResponse {
+  student: StudentRecord
+}
+
+export function useStudentLogin() {
+  return useMutation<StudentAuthResponse, ApiError, { pid: string; password: string }>({
+    mutationFn: (body) =>
+      apiFetch('/api/v1/auth/student/login', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+  })
+}
+
+export function useStudentRegister() {
+  return useMutation<StudentAuthResponse, ApiError, { pid: string; firstName: string; lastName: string; password: string }>({
+    mutationFn: (body) =>
+      apiFetch('/api/v1/auth/student/register', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Student assignment list (dashboard)
+// ---------------------------------------------------------------------------
+
+export interface StudentAssignmentItem {
+  slug: string
+  title: string
+  status: 'not_started' | 'in_progress' | 'submitted'
+  score: { earned: number; total: number } | null
+  dueAt: string | null
+  problemCount: number
+}
+
+export function useStudentAssignments() {
+  return useQuery<StudentAssignmentItem[]>({
+    queryKey: ['student-assignments'],
+    queryFn: () => apiFetch('/api/v1/student/assignments'),
   })
 }
 
@@ -111,5 +165,46 @@ export function useResult(slug: string) {
     queryKey: keys.result(slug),
     queryFn: () => apiFetch(`/api/v1/assignments/${slug}/result`),
     enabled: !!slug,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Instructor auth
+// ---------------------------------------------------------------------------
+
+interface InstructorRecord {
+  id: string
+  email: string
+  name: string
+}
+
+interface InstructorResponse {
+  instructor: InstructorRecord
+}
+
+export function useInstructorLogin() {
+  return useMutation<InstructorResponse, ApiError, { email: string; password: string }>({
+    mutationFn: (body) =>
+      apiFetch('/api/v1/auth/instructor/login', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+  })
+}
+
+export function useInstructorRegister() {
+  return useMutation<InstructorResponse, ApiError, { name: string; email: string; password: string }>({
+    mutationFn: (body) =>
+      apiFetch('/api/v1/auth/instructor/register', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+  })
+}
+
+export function useInstructorLogout() {
+  return useMutation<{ ok: boolean }, ApiError, void>({
+    mutationFn: () =>
+      apiFetch('/api/v1/auth/instructor/logout', { method: 'POST' }),
   })
 }

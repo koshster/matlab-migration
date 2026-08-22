@@ -5,7 +5,6 @@ interface Session {
   studentId: string
   firstName: string
   lastName: string
-  slug: string
 }
 
 const SessionContext = createContext<Session | null>(null)
