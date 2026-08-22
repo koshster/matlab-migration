@@ -17,7 +17,7 @@ export default function WorkspaceLayout() {
   const navigate = useNavigate()
   const session = useSession()
 
-  const [currentIndex, setCurrentIndex] = useState(1)
+  const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, number | null>>({})
   const [lastCheck, setLastCheck] = useState<CheckResult | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -38,8 +38,8 @@ export default function WorkspaceLayout() {
   }, [currentIndex, problem?.savedAnswers])
 
   function navigate_problem(index: number) {
-    // Wrap: 0 → 8, 9 → 1
-    const next = ((index - 1 + TOTAL_PROBLEMS) % TOTAL_PROBLEMS) + 1
+    // Wrap: -1 → 7, 8 → 0
+    const next = ((index % TOTAL_PROBLEMS) + TOTAL_PROBLEMS) % TOTAL_PROBLEMS
     setCurrentIndex(next)
   }
 

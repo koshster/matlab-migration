@@ -26,8 +26,8 @@ class Student(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     pid: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -118,6 +118,7 @@ class Assignment(Base):
     course_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     tolerance: Mapped[float] = mapped_column(Float, default=0.01, nullable=False)
     feedback_mode: Mapped[str] = mapped_column(String(32), default="per_field", nullable=False)
@@ -186,6 +187,7 @@ class StudentAssignment(Base):
         UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
     )
     seed: Mapped[int] = mapped_column(Integer, nullable=False)
+    draft_answers: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -3,31 +3,36 @@ interface ForceArrowProps {
   fx: number
   fy: number
   label: string
+  fontSize: number
 }
 
 const ARROW_LEN = 1.8
 const ARROW_ID_COUNTER = { n: 0 }
 
-export default function ForceArrow({ node, fx, fy, label }: ForceArrowProps) {
-  // Each arrow needs a unique marker id (multiple arrows in one SVG)
+export default function ForceArrow({ node, fx, fy, label, fontSize }: ForceArrowProps) {
   const id = `arrowhead-${String(ARROW_ID_COUNTER.n++)}`
 
   const mag = Math.sqrt(fx * fx + fy * fy)
   if (mag === 0) return null
 
-  // Unit vector in force direction
   const ux = fx / mag
   const uy = fy / mag
 
-  // Arrow tip is at the node; tail is ARROW_LEN units away in the opposite direction
+  // Tip at node; tail is ARROW_LEN units back
   const x1 = node.x - ux * ARROW_LEN
   const y1 = node.y - uy * ARROW_LEN
   const x2 = node.x
   const y2 = node.y
 
-  // Label midpoint, offset perpendicular to arrow
-  const lx = (x1 + x2) / 2 - uy * 0.45
-  const ly = (y1 + y2) / 2 + ux * 0.45
+  // Place label 3/4 of the way from tip toward tail — keeps it away from the node cluster
+  const tlx = x2 + (x1 - x2) * 0.75
+  const tly = y2 + (y1 - y2) * 0.75
+  const labelOffset = fontSize * 1.2
+  const lx = tlx - uy * labelOffset
+  const ly = tly + ux * labelOffset
+
+  const bgW = label.length * fontSize * 0.65
+  const bgH = fontSize * 1.5
 
   return (
     <g>
@@ -50,19 +55,29 @@ export default function ForceArrow({ node, fx, fy, label }: ForceArrowProps) {
         markerEnd={`url(#${id})`}
       />
       {label && (
-        <text
-          x={lx}
-          y={ly}
-          transform={`scale(1,-1) translate(0,${-2 * ly})`}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize={0.42}
-          fill="#dc2626"
-          fontFamily="sans-serif"
-          fontWeight="700"
-        >
-          {label}
-        </text>
+        <g transform={`scale(1,-1) translate(0,${-2 * ly})`}>
+          <rect
+            x={lx - bgW / 2}
+            y={ly - bgH / 2}
+            width={bgW}
+            height={bgH}
+            rx={bgH / 4}
+            fill="white"
+            fillOpacity={0.85}
+          />
+          <text
+            x={lx}
+            y={ly}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={fontSize}
+            fill="#dc2626"
+            fontFamily="sans-serif"
+            fontWeight="700"
+          >
+            {label}
+          </text>
+        </g>
       )}
     </g>
   )

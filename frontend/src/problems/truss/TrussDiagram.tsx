@@ -20,6 +20,24 @@ export default function TrussDiagram({ geometry }: { geometry: unknown }) {
   // Build node lookup for member rendering
   const nodeMap = new Map(g.nodes.map((n) => [n.id, n]))
 
+  // Truss centroid — used to pick outward perpendicular direction for each label
+  const nodeCount = g.nodes.length || 1
+  const centroid = {
+    x: g.nodes.reduce((s, n) => s + n.x, 0) / nodeCount,
+    y: g.nodes.reduce((s, n) => s + n.y, 0) / nodeCount,
+  }
+
+  // Derive label size from shortest member so labels scale with diagram density
+  const memberLengths = g.members.map((m) => {
+    const a = nodeMap.get(m.node1)
+    const b = nodeMap.get(m.node2)
+    if (!a || !b) return Infinity
+    return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
+  })
+  const minLen = Math.min(...memberLengths, Infinity)
+  const labelSize = Math.min(Math.max(minLen * 0.14, 0.24), 0.32)
+  const labelOffset = labelSize * 1.2
+
   return (
     <svg
       viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
@@ -41,26 +59,26 @@ export default function TrussDiagram({ geometry }: { geometry: unknown }) {
 
         {/* 1. Members (bottom layer) */}
         {g.members.map((m) => {
-          const from = nodeMap.get(m.from)
-          const to = nodeMap.get(m.to)
+          const from = nodeMap.get(m.node1)
+          const to = nodeMap.get(m.node2)
           if (!from || !to) return null
-          return <Member key={m.id} from={from} to={to} label={m.label} />
+          return <Member key={m.id} from={from} to={to} label={m.id} fontSize={labelSize} offset={labelOffset} centroid={centroid} />
         })}
 
         {/* 2. Supports */}
         {g.supports.map((s, i) => {
-          const node = nodeMap.get(s.node)
+          const node = nodeMap.get(s.nodeId)
           if (!node) return null
           return s.type === 'pin'
-            ? <PinSupport key={i} x={node.x} y={node.y} angleDeg={s.angleDeg} />
-            : <RollerSupport key={i} x={node.x} y={node.y} angleDeg={s.angleDeg} />
+            ? <PinSupport key={i} x={node.x} y={node.y} angleDeg={0} />
+            : <RollerSupport key={i} x={node.x} y={node.y} angleDeg={0} />
         })}
 
         {/* 3. Force arrows */}
         {g.forces.map((f, i) => {
-          const node = nodeMap.get(f.node)
+          const node = nodeMap.get(f.nodeId)
           if (!node) return null
-          return <ForceArrow key={i} node={node} fx={f.fx} fy={f.fy} label={f.label} />
+          return <ForceArrow key={i} node={node} fx={f.fx} fy={f.fy} label={f.label} fontSize={labelSize} />
         })}
 
         {/* 4. Nodes (top layer — drawn last so they're never hidden by members) */}
