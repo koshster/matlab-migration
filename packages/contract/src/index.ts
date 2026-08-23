@@ -259,6 +259,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Courses the signed-in instructor has a role on */
+        get: operations["listCourses"];
+        put?: never;
+        /** Create a course */
+        post: operations["createCourse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/courses/{courseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Course detail */
+        get: operations["getCourse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update course metadata */
+        patch: operations["updateCourse"];
+        trace?: never;
+    };
+    "/api/v1/admin/courses/{courseId}/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Roster entries for a course, claimed and unclaimed alike */
+        get: operations["listRoster"];
+        put?: never;
+        /**
+         * Add roster entries in bulk, by PID and/or email
+         * @description Entries may name students who have no account yet; `studentId` stays null until an account claims the entry. Returns one result per submitted row so partial failures are visible rather than silent.
+         */
+        post: operations["addRosterEntries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/courses/{courseId}/roster/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a roster entry's status (e.g. drop a student) */
+        patch: operations["updateRosterEntry"];
+        trace?: never;
+    };
+    "/api/v1/admin/courses/{courseId}/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instructors and TAs with a role on the course */
+        get: operations["listCourseStaff"];
+        put?: never;
+        /** Grant an instructor a role on the course */
+        post: operations["addCourseStaff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -325,6 +417,106 @@ export interface components {
             id: string;
             name: string;
             email: string;
+        };
+        /**
+         * @description Ordered least- to most-privileged
+         * @enum {string}
+         */
+        CourseRole: "reader" | "ta" | "instructor" | "owner";
+        CourseSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @example MAE-008 */
+            code: string;
+            /** @example Fall 2026 */
+            term: string;
+            /** @example 001 */
+            section: string;
+            /** @example Statics */
+            title: string;
+            isArchived: boolean;
+            /** @description Roster entries with status `active` */
+            studentCount: number;
+            /** @description Roster entries still `invited` */
+            pendingInviteCount: number;
+            assignmentCount: number;
+            viewerRole: components["schemas"]["CourseRole"];
+        };
+        CourseCreateRequest: {
+            code: string;
+            term: string;
+            /** @default 001 */
+            section: string;
+            title?: string;
+        };
+        CourseUpdateRequest: {
+            title?: string;
+            isArchived?: boolean;
+        };
+        /**
+         * @description `invited` until the student accepts. Assignments only become visible at `active`.
+         * @enum {string}
+         */
+        RosterEntryStatus: "invited" | "active" | "declined" | "dropped";
+        RosterEntry: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["RosterEntryStatus"];
+            /** @description Normalized; null when the entry was added by email only */
+            pid: string | null;
+            email: string | null;
+            firstName: string | null;
+            lastName: string | null;
+            /** @description True once a registered account has claimed this entry. False means the student was rostered ahead of signing up. */
+            hasAccount: boolean;
+            /** Format: date-time */
+            invitedAt: string;
+            /** Format: date-time */
+            acceptedAt: string | null;
+        };
+        RosterImportRequest: {
+            entries: components["schemas"]["RosterImportEntry"][];
+        };
+        /** @description At least one of `pid` or `email` must be present */
+        RosterImportEntry: {
+            pid?: string | null;
+            email?: string | null;
+            firstName?: string | null;
+            lastName?: string | null;
+        };
+        /** @enum {string} */
+        RosterImportOutcome: "added" | "already_present" | "linked_existing_account" | "invalid";
+        RosterImportRowResult: {
+            /** @description 1-based index into the submitted entries */
+            row: number;
+            outcome: components["schemas"]["RosterImportOutcome"];
+            pid: string | null;
+            email: string | null;
+            /** @description Reason, when the outcome is `invalid` */
+            message: string | null;
+        };
+        RosterImportResult: {
+            added: number;
+            alreadyPresent: number;
+            linked: number;
+            invalid: number;
+            results: components["schemas"]["RosterImportRowResult"][];
+        };
+        RosterEntryUpdateRequest: {
+            status: components["schemas"]["RosterEntryStatus"];
+        };
+        CourseStaffMember: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            instructorId: string;
+            name: string;
+            email: string;
+            role: components["schemas"]["CourseRole"];
+        };
+        CourseStaffAddRequest: {
+            email: string;
+            role: components["schemas"]["CourseRole"];
         };
         StudentAssignmentListItem: {
             slug: string;
@@ -492,6 +684,10 @@ export interface components {
         slug: string;
         /** @description 1-based problem index within the assignment */
         index: number;
+        /** @description Internal course UUID */
+        courseId: string;
+        /** @description Internal roster-entry UUID (never a PID — standing rule */
+        entryId: string;
     };
     requestBodies: never;
     headers: never;
@@ -947,6 +1143,327 @@ export interface operations {
             };
             /** @description Not yet submitted */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCourses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Course list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Course created; caller becomes owner */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseSummary"];
+                };
+            };
+            /** @description A course with that code, term and section already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Course detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseSummary"];
+                };
+            };
+            /** @description No such course, or caller has no role on it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateCourse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated course */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseSummary"];
+                };
+            };
+            /** @description Insufficient course role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listRoster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Roster entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterEntry"][];
+                };
+            };
+            /** @description No such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    addRosterEntries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RosterImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Per-row outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterImportResult"];
+                };
+            };
+            /** @description Insufficient course role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateRosterEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+                /** @description Internal roster-entry UUID (never a PID — standing rule */
+                entryId: components["parameters"]["entryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RosterEntryUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterEntry"];
+                };
+            };
+            /** @description Insufficient course role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such course or entry */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCourseStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Staff list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseStaffMember"][];
+                };
+            };
+            /** @description No such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    addCourseStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseStaffAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Staff member added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseStaffMember"];
+                };
+            };
+            /** @description Only an owner may change course staff */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such course or no instructor with that email */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description That instructor already has a role on the course */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

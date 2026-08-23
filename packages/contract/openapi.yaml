@@ -313,6 +313,215 @@ paths:
         "404":
           description: Not yet submitted
 
+  # ---------------------------------------------------------------------------
+  # Admin — courses
+  #
+  # All admin routes require an instructor session and a sufficient course role.
+  # A course the caller has no role on returns 404, not 403, so course ids
+  # cannot be enumerated. Roster entries are addressed by their own UUID —
+  # a PID must never appear in a URL (standing rule #7).
+  # ---------------------------------------------------------------------------
+
+  /api/v1/admin/courses:
+    get:
+      operationId: listCourses
+      summary: Courses the signed-in instructor has a role on
+      tags: [admin-courses]
+      responses:
+        "200":
+          description: Course list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CourseSummary"
+        "401":
+          description: Not authenticated
+    post:
+      operationId: createCourse
+      summary: Create a course
+      tags: [admin-courses]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseCreateRequest"
+      responses:
+        "201":
+          description: Course created; caller becomes owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseSummary"
+        "409":
+          description: A course with that code, term and section already exists
+
+  /api/v1/admin/courses/{courseId}:
+    get:
+      operationId: getCourse
+      summary: Course detail
+      tags: [admin-courses]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      responses:
+        "200":
+          description: Course detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseSummary"
+        "404":
+          description: No such course, or caller has no role on it
+    patch:
+      operationId: updateCourse
+      summary: Update course metadata
+      tags: [admin-courses]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUpdateRequest"
+      responses:
+        "200":
+          description: Updated course
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseSummary"
+        "403":
+          description: Insufficient course role
+        "404":
+          description: No such course
+
+  # ---------------------------------------------------------------------------
+  # Admin — roster
+  # ---------------------------------------------------------------------------
+
+  /api/v1/admin/courses/{courseId}/roster:
+    get:
+      operationId: listRoster
+      summary: Roster entries for a course, claimed and unclaimed alike
+      tags: [admin-roster]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      responses:
+        "200":
+          description: Roster entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RosterEntry"
+        "404":
+          description: No such course
+    post:
+      operationId: addRosterEntries
+      summary: Add roster entries in bulk, by PID and/or email
+      description: >
+        Entries may name students who have no account yet; `studentId` stays
+        null until an account claims the entry. Returns one result per
+        submitted row so partial failures are visible rather than silent.
+      tags: [admin-roster]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RosterImportRequest"
+      responses:
+        "200":
+          description: Per-row outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterImportResult"
+        "403":
+          description: Insufficient course role
+        "404":
+          description: No such course
+
+  /api/v1/admin/courses/{courseId}/roster/{entryId}:
+    patch:
+      operationId: updateRosterEntry
+      summary: Change a roster entry's status (e.g. drop a student)
+      tags: [admin-roster]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+        - $ref: "#/components/parameters/entryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RosterEntryUpdateRequest"
+      responses:
+        "200":
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RosterEntry"
+        "403":
+          description: Insufficient course role
+        "404":
+          description: No such course or entry
+
+  # ---------------------------------------------------------------------------
+  # Admin — course staff
+  # ---------------------------------------------------------------------------
+
+  /api/v1/admin/courses/{courseId}/staff:
+    get:
+      operationId: listCourseStaff
+      summary: Instructors and TAs with a role on the course
+      tags: [admin-staff]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CourseStaffMember"
+        "404":
+          description: No such course
+    post:
+      operationId: addCourseStaff
+      summary: Grant an instructor a role on the course
+      tags: [admin-staff]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseStaffAddRequest"
+      responses:
+        "201":
+          description: Staff member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseStaffMember"
+        "403":
+          description: Only an owner may change course staff
+        "404":
+          description: No such course or no instructor with that email
+        "409":
+          description: That instructor already has a role on the course
+
 # =============================================================================
 # Parameters
 # =============================================================================
@@ -335,6 +544,24 @@ components:
         type: integer
         minimum: 1
       description: 1-based problem index within the assignment
+
+    courseId:
+      name: courseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Internal course UUID
+
+    entryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Internal roster-entry UUID (never a PID — standing rule #7)
 
   # ===========================================================================
   # Schemas
@@ -466,6 +693,222 @@ components:
           type: string
         email:
           type: string
+
+    # -------------------------------------------------------------------------
+    # Admin — courses, roster, staff
+    # -------------------------------------------------------------------------
+
+    CourseRole:
+      type: string
+      description: Ordered least- to most-privileged
+      enum: [reader, ta, instructor, owner]
+
+    CourseSummary:
+      type: object
+      required:
+        [id, code, term, section, title, isArchived, studentCount, pendingInviteCount,
+         assignmentCount, viewerRole]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: MAE-008
+        term:
+          type: string
+          example: Fall 2026
+        section:
+          type: string
+          example: "001"
+        title:
+          type: string
+          example: Statics
+        isArchived:
+          type: boolean
+        studentCount:
+          type: integer
+          description: Roster entries with status `active`
+        pendingInviteCount:
+          type: integer
+          description: Roster entries still `invited`
+        assignmentCount:
+          type: integer
+        viewerRole:
+          $ref: "#/components/schemas/CourseRole"
+
+    CourseCreateRequest:
+      type: object
+      required: [code, term]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        term:
+          type: string
+          minLength: 1
+          maxLength: 64
+        section:
+          type: string
+          default: "001"
+          maxLength: 32
+        title:
+          type: string
+          maxLength: 255
+
+    CourseUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        isArchived:
+          type: boolean
+
+    RosterEntryStatus:
+      type: string
+      description: >
+        `invited` until the student accepts. Assignments only become visible at
+        `active`.
+      enum: [invited, active, declined, dropped]
+
+    RosterEntry:
+      type: object
+      required: [id, status, pid, email, firstName, lastName, hasAccount, invitedAt, acceptedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/RosterEntryStatus"
+        pid:
+          type: string
+          nullable: true
+          description: Normalized; null when the entry was added by email only
+        email:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        hasAccount:
+          type: boolean
+          description: >
+            True once a registered account has claimed this entry. False means
+            the student was rostered ahead of signing up.
+        invitedAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    RosterImportRequest:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/RosterImportEntry"
+
+    RosterImportEntry:
+      type: object
+      description: At least one of `pid` or `email` must be present
+      properties:
+        pid:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+
+    RosterImportOutcome:
+      type: string
+      enum: [added, already_present, linked_existing_account, invalid]
+
+    RosterImportRowResult:
+      type: object
+      required: [row, outcome, pid, email, message]
+      properties:
+        row:
+          type: integer
+          description: 1-based index into the submitted entries
+        outcome:
+          $ref: "#/components/schemas/RosterImportOutcome"
+        pid:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        message:
+          type: string
+          nullable: true
+          description: Reason, when the outcome is `invalid`
+
+    RosterImportResult:
+      type: object
+      required: [added, alreadyPresent, linked, invalid, results]
+      properties:
+        added:
+          type: integer
+        alreadyPresent:
+          type: integer
+        linked:
+          type: integer
+        invalid:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/RosterImportRowResult"
+
+    RosterEntryUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/RosterEntryStatus"
+
+    CourseStaffMember:
+      type: object
+      required: [id, instructorId, name, email, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        instructorId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/CourseRole"
+
+    CourseStaffAddRequest:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/CourseRole"
 
     StudentAssignmentListItem:
       type: object
