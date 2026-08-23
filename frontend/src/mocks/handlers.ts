@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { adminHandlers } from './adminHandlers'
+import { assignmentHandlers } from './assignmentHandlers'
 import { studentHandlers } from './studentHandlers'
 import assignmentSummary from '@statics/contract/fixtures/assignment-summary.json'
 import truss3node from '@statics/contract/fixtures/truss-3node.json'
@@ -140,5 +141,6 @@ export const handlers = [
   }),
 
   ...studentHandlers,
+  ...assignmentHandlers,
   ...adminHandlers,
 ]

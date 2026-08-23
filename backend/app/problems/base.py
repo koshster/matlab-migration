@@ -80,6 +80,25 @@ class GradingResult(BaseModel):
     )
 
 
+class ParamFieldSpec(BaseModel):
+    """One configurable generator knob, described so a UI can render it.
+
+    The assignment builder renders its difficulty form from these, which is why
+    no admin component needs to know what a truss is (CLAUDE.md registry
+    invariant). Every field carries a default, so an untouched form reproduces
+    the generator's own behaviour.
+    """
+
+    name: str = Field(..., description="Key written into assignment_problems.params")
+    label: str = Field(..., description="Human readable label")
+    value_type: str = Field(default="integer", description="'integer' | 'number'")
+    default: float = Field(..., description="Value used when the field is left alone")
+    minimum: float | None = Field(default=None)
+    maximum: float | None = Field(default=None)
+    step: float | None = Field(default=None)
+    help_text: str = Field(default="", description="Short explanation for the instructor")
+
+
 @runtime_checkable
 class ProblemGeneratorProtocol(Protocol):
     """Unified interface required for any statics problem backend plugin."""
@@ -87,6 +106,16 @@ class ProblemGeneratorProtocol(Protocol):
     @property
     def problem_type(self) -> str:
         """Unique problem domain identifier string."""
+        ...
+
+    @property
+    def display_name(self) -> str:
+        """Human readable name shown in the assignment builder."""
+        ...
+
+    @property
+    def params_schema(self) -> list[ParamFieldSpec]:
+        """Configurable knobs for this problem type, in display order."""
         ...
 
     def generate(self, seed: int, params: dict[str, Any] | None = None) -> ProblemDisplayData:

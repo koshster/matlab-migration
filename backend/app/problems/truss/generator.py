@@ -7,6 +7,7 @@ from app.problems.base import (
     AnswerSubmission,
     FieldResult,
     GradingResult,
+    ParamFieldSpec,
     ProblemDisplayData,
     VisualElementSchema,
 )
@@ -24,6 +25,52 @@ class TrussGenerator:
     def problem_type(self) -> str:
         return "truss"
 
+    @property
+    def display_name(self) -> str:
+        return "Planar truss"
+
+    @property
+    def params_schema(self) -> list[ParamFieldSpec]:
+        """Knobs the assignment builder exposes for a truss problem.
+
+        Support profile is deliberately absent: solve_support_reactions raises
+        for anything but one pin plus one roller, and the legacy 0-pin/3-roller
+        branch is unported. Offering it would let an instructor save a
+        configuration that cannot be solved.
+        """
+        return [
+            ParamFieldSpec(
+                name="num_nodes",
+                label="Joints",
+                value_type="integer",
+                default=3,
+                minimum=3,
+                maximum=8,
+                step=1,
+                help_text="Members scale as 2n−3, so joints drive the problem's size.",
+            ),
+            ParamFieldSpec(
+                name="max_force",
+                label="Max load (kN)",
+                value_type="integer",
+                default=5,
+                minimum=1,
+                maximum=20,
+                step=1,
+                help_text="Load magnitudes are whole numbers from 1 to this value.",
+            ),
+            ParamFieldSpec(
+                name="load_count",
+                label="Applied loads",
+                value_type="integer",
+                default=1,
+                minimum=1,
+                maximum=2,
+                step=1,
+                help_text="Clamped to the number of free joints on small trusses.",
+            ),
+        ]
+
     def _build_truss_instance(
         self, seed: int, params: dict[str, Any] | None = None
     ) -> tuple[
@@ -34,14 +81,22 @@ class TrussGenerator:
         list[dict[str, Any]],
     ]:
         rng = np.random.default_rng(seed)
+        p = params or {}
         node_count_schedule = [3, 3, 4, 4, 5, 5, 6, 6]
-        problem_id = (params or {}).get("problem_id", 1)
+        problem_id = p.get("problem_id", 1)
         default_n = node_count_schedule[min(max(problem_id - 1, 0), len(node_count_schedule) - 1)]
-        n_nodes = (params or {}).get("num_nodes", default_n)
+        n_nodes = p.get("num_nodes", default_n)
 
         node_coords, members, _ = generate_truss_geometry(n_nodes, rng)
         pins, rollers = generate_supports(node_coords, rng)
-        forces = generate_loads(node_coords, pins, rollers, rng)
+        forces = generate_loads(
+            node_coords,
+            pins,
+            rollers,
+            rng,
+            max_magnitude=float(p.get("max_force", 5.0)),
+            load_count=int(p.get("load_count", 1)),
+        )
 
         return node_coords, members, pins, rollers, forces
 

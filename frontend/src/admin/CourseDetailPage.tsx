@@ -4,6 +4,7 @@ import AdminLayout from './AdminLayout'
 import RosterTable from './RosterTable'
 import RosterImportPanel from './RosterImportPanel'
 import StaffTab from './StaffTab'
+import AssignmentsTab from './AssignmentsTab'
 import { useCourse, useUpdateCourse } from '../api/hooks'
 
 type Tab = 'roster' | 'assignments' | 'staff'
@@ -137,16 +138,7 @@ export default function CourseDetailPage() {
       )}
 
       {tab === 'assignments' && (
-        <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
-          <p className="text-sm text-gray-600">
-            {course.assignmentCount === 0
-              ? 'No assignments yet.'
-              : `${String(course.assignmentCount)} assignment${course.assignmentCount === 1 ? '' : 's'}.`}
-          </p>
-          <p className="mt-1 text-sm text-gray-400">
-            The assignment builder is the next slice of work.
-          </p>
-        </div>
+        <AssignmentsTab courseId={courseId} canManage={canManageRoster} />
       )}
 
       {tab === 'staff' && (

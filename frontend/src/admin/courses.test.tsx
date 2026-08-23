@@ -135,14 +135,17 @@ describe('courses page', () => {
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument()
   })
 
-  it('shows an empty assignments tab pointing at the next slice', async () => {
+  it('lists the course’s assignments on the assignments tab', async () => {
     const user = userEvent.setup()
     renderCourses()
     await user.click(await screen.findByText('MAE-008'))
     await screen.findByRole('tab', { name: 'Assignments' })
 
     await user.click(screen.getByRole('tab', { name: 'Assignments' }))
-    expect(await screen.findByText(/assignment builder/i)).toBeInTheDocument()
+    expect(await screen.findByText('Truss Analysis — Fall 2026')).toBeInTheDocument()
+    // Draft and published are visually distinguished for the instructor.
+    expect(screen.getByText('Published')).toBeInTheDocument()
+    expect(screen.getByText('Draft')).toBeInTheDocument()
   })
 
   it('renders a not-found message for an unknown course id', async () => {

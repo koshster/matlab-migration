@@ -35,6 +35,11 @@ class ProblemRegistry:
         """List all registered problem type identifiers."""
         return list(self._generators.keys())
 
+    def all(self) -> list[ProblemGeneratorProtocol]:
+        """Every registered generator, for building the assignment builder's
+        problem-type picker without hardcoding any type."""
+        return list(self._generators.values())
+
 
 # Global registry singleton instance
 problem_registry = ProblemRegistry()

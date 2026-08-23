@@ -10,6 +10,7 @@ const StudentDashboard = lazy(() => import('./student/Dashboard'))
 const AdminAuthPage = lazy(() => import('./admin/AuthPage'))
 const CoursesPage = lazy(() => import('./admin/CoursesPage'))
 const CourseDetailPage = lazy(() => import('./admin/CourseDetailPage'))
+const AssignmentBuilder = lazy(() => import('./admin/AssignmentBuilder'))
 
 function RequireSession({ children }: { children: React.ReactNode }) {
   const session = useOptionalSession()
@@ -92,6 +93,16 @@ function AppRoutes() {
           <RequireInstructor>
             <Suspense fallback={<FullPageSpinner />}>
               <CourseDetailPage />
+            </Suspense>
+          </RequireInstructor>
+        }
+      />
+      <Route
+        path="/admin/assignments/:assignmentId"
+        element={
+          <RequireInstructor>
+            <Suspense fallback={<FullPageSpinner />}>
+              <AssignmentBuilder />
             </Suspense>
           </RequireInstructor>
         }

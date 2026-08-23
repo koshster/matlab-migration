@@ -2,6 +2,7 @@ import '@testing-library/jest-dom'
 import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest'
 import { server } from '../mocks/server'
 import { resetAdminMockState } from '../mocks/adminHandlers'
+import { resetAssignmentMockState } from '../mocks/assignmentHandlers'
 import { resetStudentMockState } from '../mocks/studentHandlers'
 
 beforeAll(() => {
@@ -15,6 +16,7 @@ beforeAll(() => {
 beforeEach(() => {
   resetAdminMockState()
   resetStudentMockState()
+  resetAssignmentMockState()
 })
 
 afterEach(() => {

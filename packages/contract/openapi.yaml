@@ -559,6 +559,176 @@ paths:
           description: No such course or entry
 
   # ---------------------------------------------------------------------------
+  # Admin — assignments
+  #
+  # The problem-type catalogue drives the builder's difficulty form, so no admin
+  # component needs to know about any specific problem type.
+  # ---------------------------------------------------------------------------
+
+  /api/v1/admin/problem-types:
+    get:
+      operationId: listProblemTypes
+      summary: Registered problem types and their configurable params
+      tags: [admin-assignments]
+      responses:
+        "200":
+          description: Problem type catalogue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProblemTypeInfo"
+        "401":
+          description: Not authenticated
+
+  /api/v1/admin/courses/{courseId}/assignments:
+    get:
+      operationId: listCourseAssignments
+      summary: Assignments in a course
+      tags: [admin-assignments]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      responses:
+        "200":
+          description: Assignment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminAssignmentSummary"
+        "404":
+          description: No such course
+    post:
+      operationId: createAssignment
+      summary: Create a draft assignment with its problem slots
+      tags: [admin-assignments]
+      parameters:
+        - $ref: "#/components/parameters/courseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignmentCreateRequest"
+      responses:
+        "201":
+          description: Draft created — not visible to students until published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAssignmentDetail"
+        "403":
+          description: Insufficient course role
+        "409":
+          description: That slug is already used in this course
+
+  /api/v1/admin/assignments/{assignmentId}:
+    get:
+      operationId: getAdminAssignment
+      summary: Assignment detail, including problem slots and targeting
+      tags: [admin-assignments]
+      parameters:
+        - $ref: "#/components/parameters/assignmentId"
+      responses:
+        "200":
+          description: Assignment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAssignmentDetail"
+        "404":
+          description: No such assignment, or caller has no role on its course
+    patch:
+      operationId: updateAssignment
+      summary: Update settings, problem slots and/or targeting
+      description: >
+        Every field is optional; omitted fields are left alone. `problems` and
+        `targets` replace their collection wholesale when present.
+      tags: [admin-assignments]
+      parameters:
+        - $ref: "#/components/parameters/assignmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignmentUpdateRequest"
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAssignmentDetail"
+        "403":
+          description: Insufficient course role
+        "404":
+          description: No such assignment
+        "409":
+          description: That slug is already used in this course
+
+  /api/v1/admin/assignments/{assignmentId}/publish:
+    post:
+      operationId: publishAssignment
+      summary: Publish or unpublish an assignment
+      description: >
+        Publishing is what makes an assignment visible to targeted students.
+        Rejected when the assignment has no problem slots, since a published
+        empty assignment is a dead end for the student.
+      tags: [admin-assignments]
+      parameters:
+        - $ref: "#/components/parameters/assignmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRequest"
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAssignmentDetail"
+        "403":
+          description: Insufficient course role
+        "409":
+          description: Cannot publish an assignment with no problems
+        "404":
+          description: No such assignment
+
+  /api/v1/admin/assignments/{assignmentId}/preview/{index}:
+    get:
+      operationId: previewAssignmentProblem
+      summary: Render one problem slot as a student would see it
+      description: >
+        Instructor-only. Returns the same payload shape a student receives, so
+        the builder can reuse the problem renderer. Carries no solution data —
+        the separate replay route is the only solution-bearing endpoint.
+      tags: [admin-assignments]
+      parameters:
+        - $ref: "#/components/parameters/assignmentId"
+        - $ref: "#/components/parameters/index"
+        - name: seed
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Reroll the preview with a specific seed
+      responses:
+        "200":
+          description: Problem payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemPayload"
+        "404":
+          description: No such assignment or problem index
+
+  # ---------------------------------------------------------------------------
   # Admin — course staff
   # ---------------------------------------------------------------------------
 
@@ -637,6 +807,15 @@ components:
         type: string
         format: uuid
       description: Internal course UUID
+
+    assignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Internal assignment UUID
 
     entryId:
       name: entryId
@@ -835,7 +1014,6 @@ components:
           maxLength: 64
         section:
           type: string
-          default: "001"
           maxLength: 32
         title:
           type: string
@@ -967,6 +1145,231 @@ components:
       properties:
         status:
           $ref: "#/components/schemas/RosterEntryStatus"
+
+    # -------------------------------------------------------------------------
+    # Admin — assignments
+    # -------------------------------------------------------------------------
+
+    ParamFieldSpec:
+      type: object
+      description: One configurable generator knob, described so a UI can render it
+      required: [name, label, valueType, default, minimum, maximum, step, helpText]
+      properties:
+        name:
+          type: string
+          description: Key written into the problem slot's params
+        label:
+          type: string
+        valueType:
+          type: string
+          enum: [integer, number]
+        default:
+          type: number
+          description: Used when the instructor leaves the field alone
+        minimum:
+          type: number
+          nullable: true
+        maximum:
+          type: number
+          nullable: true
+        step:
+          type: number
+          nullable: true
+        helpText:
+          type: string
+
+    ProblemTypeInfo:
+      type: object
+      required: [problemType, displayName, paramsSchema]
+      properties:
+        problemType:
+          type: string
+          description: Drives the renderer registry
+          example: truss
+        displayName:
+          type: string
+          example: Planar truss
+        paramsSchema:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParamFieldSpec"
+
+    FeedbackMode:
+      type: string
+      enum: [binary, per_field]
+
+    AssignmentAudience:
+      type: string
+      description: >
+        `all` is evaluated at request time, so students who join the course
+        later are included without re-assigning. `selected` uses an explicit
+        target list.
+      enum: [all, selected]
+
+    AdminProblemSlot:
+      type: object
+      required: [orderIndex, problemType, params, points]
+      properties:
+        orderIndex:
+          type: integer
+          minimum: 1
+          description: 1-based position in the assignment
+        problemType:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: number
+          description: Keys come from the problem type's paramsSchema
+        points:
+          type: number
+          default: 1
+
+    AdminAssignmentSummary:
+      type: object
+      required:
+        [id, courseId, slug, title, isPublished, audience, problemCount,
+         targetedStudentCount, dueAt, opensAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        isPublished:
+          type: boolean
+        audience:
+          $ref: "#/components/schemas/AssignmentAudience"
+        problemCount:
+          type: integer
+        targetedStudentCount:
+          type: integer
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        opensAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AdminAssignmentDetail:
+      allOf:
+        - $ref: "#/components/schemas/AdminAssignmentSummary"
+        - type: object
+          required:
+            [instructions, tolerance, feedbackMode, maxAttempts, problems, targetEntryIds]
+          properties:
+            instructions:
+              type: string
+            tolerance:
+              type: number
+            feedbackMode:
+              $ref: "#/components/schemas/FeedbackMode"
+            maxAttempts:
+              type: integer
+              nullable: true
+              description: null means unlimited
+            problems:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminProblemSlot"
+            targetEntryIds:
+              type: array
+              description: Roster-entry ids; only meaningful when audience is `selected`
+              items:
+                type: string
+                format: uuid
+
+    AssignmentCreateRequest:
+      type: object
+      required: [title, slug]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 128
+        instructions:
+          type: string
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        opensAt:
+          type: string
+          format: date-time
+          nullable: true
+        tolerance:
+          type: number
+        feedbackMode:
+          $ref: "#/components/schemas/FeedbackMode"
+        maxAttempts:
+          type: integer
+          nullable: true
+        audience:
+          $ref: "#/components/schemas/AssignmentAudience"
+        targetEntryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminProblemSlot"
+
+    AssignmentUpdateRequest:
+      type: object
+      description: All fields optional; omitted fields are left unchanged
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        instructions:
+          type: string
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        opensAt:
+          type: string
+          format: date-time
+          nullable: true
+        tolerance:
+          type: number
+        feedbackMode:
+          $ref: "#/components/schemas/FeedbackMode"
+        maxAttempts:
+          type: integer
+          nullable: true
+        audience:
+          $ref: "#/components/schemas/AssignmentAudience"
+        targetEntryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminProblemSlot"
+
+    PublishRequest:
+      type: object
+      required: [isPublished]
+      properties:
+        isPublished:
+          type: boolean
 
     CourseStaffMember:
       type: object
