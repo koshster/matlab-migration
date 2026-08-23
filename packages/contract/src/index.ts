@@ -404,6 +404,102 @@ export interface paths {
         patch: operations["updateRosterEntry"];
         trace?: never;
     };
+    "/api/v1/admin/problem-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Registered problem types and their configurable params */
+        get: operations["listProblemTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/courses/{courseId}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assignments in a course */
+        get: operations["listCourseAssignments"];
+        put?: never;
+        /** Create a draft assignment with its problem slots */
+        post: operations["createAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/assignments/{assignmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assignment detail, including problem slots and targeting */
+        get: operations["getAdminAssignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update settings, problem slots and/or targeting
+         * @description Every field is optional; omitted fields are left alone. `problems` and `targets` replace their collection wholesale when present.
+         */
+        patch: operations["updateAssignment"];
+        trace?: never;
+    };
+    "/api/v1/admin/assignments/{assignmentId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish or unpublish an assignment
+         * @description Publishing is what makes an assignment visible to targeted students. Rejected when the assignment has no problem slots, since a published empty assignment is a dead end for the student.
+         */
+        post: operations["publishAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/assignments/{assignmentId}/preview/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Render one problem slot as a student would see it
+         * @description Instructor-only. Returns the same payload shape a student receives, so the builder can reuse the problem renderer. Carries no solution data — the separate replay route is the only solution-bearing endpoint.
+         */
+        get: operations["previewAssignmentProblem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/courses/{courseId}/staff": {
         parameters: {
             query?: never;
@@ -516,8 +612,7 @@ export interface components {
         CourseCreateRequest: {
             code: string;
             term: string;
-            /** @default 001 */
-            section: string;
+            section?: string;
             title?: string;
         };
         CourseUpdateRequest: {
@@ -575,6 +670,108 @@ export interface components {
         };
         RosterEntryUpdateRequest: {
             status: components["schemas"]["RosterEntryStatus"];
+        };
+        /** @description One configurable generator knob, described so a UI can render it */
+        ParamFieldSpec: {
+            /** @description Key written into the problem slot's params */
+            name: string;
+            label: string;
+            /** @enum {string} */
+            valueType: "integer" | "number";
+            /** @description Used when the instructor leaves the field alone */
+            default: number;
+            minimum: number | null;
+            maximum: number | null;
+            step: number | null;
+            helpText: string;
+        };
+        ProblemTypeInfo: {
+            /**
+             * @description Drives the renderer registry
+             * @example truss
+             */
+            problemType: string;
+            /** @example Planar truss */
+            displayName: string;
+            paramsSchema: components["schemas"]["ParamFieldSpec"][];
+        };
+        /** @enum {string} */
+        FeedbackMode: "binary" | "per_field";
+        /**
+         * @description `all` is evaluated at request time, so students who join the course later are included without re-assigning. `selected` uses an explicit target list.
+         * @enum {string}
+         */
+        AssignmentAudience: "all" | "selected";
+        AdminProblemSlot: {
+            /** @description 1-based position in the assignment */
+            orderIndex: number;
+            problemType: string;
+            /** @description Keys come from the problem type's paramsSchema */
+            params: {
+                [key: string]: number;
+            };
+            /** @default 1 */
+            points: number;
+        };
+        AdminAssignmentSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            courseId: string;
+            slug: string;
+            title: string;
+            isPublished: boolean;
+            audience: components["schemas"]["AssignmentAudience"];
+            problemCount: number;
+            targetedStudentCount: number;
+            /** Format: date-time */
+            dueAt: string | null;
+            /** Format: date-time */
+            opensAt: string | null;
+        };
+        AdminAssignmentDetail: components["schemas"]["AdminAssignmentSummary"] & {
+            instructions: string;
+            tolerance: number;
+            feedbackMode: components["schemas"]["FeedbackMode"];
+            /** @description null means unlimited */
+            maxAttempts: number | null;
+            problems: components["schemas"]["AdminProblemSlot"][];
+            /** @description Roster-entry ids; only meaningful when audience is `selected` */
+            targetEntryIds: string[];
+        };
+        AssignmentCreateRequest: {
+            title: string;
+            slug: string;
+            instructions?: string;
+            /** Format: date-time */
+            dueAt?: string | null;
+            /** Format: date-time */
+            opensAt?: string | null;
+            tolerance?: number;
+            feedbackMode?: components["schemas"]["FeedbackMode"];
+            maxAttempts?: number | null;
+            audience?: components["schemas"]["AssignmentAudience"];
+            targetEntryIds?: string[];
+            problems?: components["schemas"]["AdminProblemSlot"][];
+        };
+        /** @description All fields optional; omitted fields are left unchanged */
+        AssignmentUpdateRequest: {
+            title?: string;
+            slug?: string;
+            instructions?: string;
+            /** Format: date-time */
+            dueAt?: string | null;
+            /** Format: date-time */
+            opensAt?: string | null;
+            tolerance?: number;
+            feedbackMode?: components["schemas"]["FeedbackMode"];
+            maxAttempts?: number | null;
+            audience?: components["schemas"]["AssignmentAudience"];
+            targetEntryIds?: string[];
+            problems?: components["schemas"]["AdminProblemSlot"][];
+        };
+        PublishRequest: {
+            isPublished: boolean;
         };
         CourseStaffMember: {
             /** Format: uuid */
@@ -795,6 +992,8 @@ export interface components {
         index: number;
         /** @description Internal course UUID */
         courseId: string;
+        /** @description Internal assignment UUID */
+        assignmentId: string;
         /** @description Internal roster-entry UUID (never a PID — standing rule */
         entryId: string;
     };
@@ -1622,6 +1821,265 @@ export interface operations {
                 content?: never;
             };
             /** @description No such course or entry */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listProblemTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Problem type catalogue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemTypeInfo"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCourseAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssignmentSummary"][];
+                };
+            };
+            /** @description No such course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal course UUID */
+                courseId: components["parameters"]["courseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Draft created — not visible to students until published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssignmentDetail"];
+                };
+            };
+            /** @description Insufficient course role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description That slug is already used in this course */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAdminAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal assignment UUID */
+                assignmentId: components["parameters"]["assignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssignmentDetail"];
+                };
+            };
+            /** @description No such assignment, or caller has no role on its course */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal assignment UUID */
+                assignmentId: components["parameters"]["assignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssignmentDetail"];
+                };
+            };
+            /** @description Insufficient course role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such assignment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description That slug is already used in this course */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    publishAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal assignment UUID */
+                assignmentId: components["parameters"]["assignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated assignment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAssignmentDetail"];
+                };
+            };
+            /** @description Insufficient course role */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such assignment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cannot publish an assignment with no problems */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewAssignmentProblem: {
+        parameters: {
+            query?: {
+                /** @description Reroll the preview with a specific seed */
+                seed?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Internal assignment UUID */
+                assignmentId: components["parameters"]["assignmentId"];
+                /** @description 1-based problem index within the assignment */
+                index: components["parameters"]["index"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Problem payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemPayload"];
+                };
+            };
+            /** @description No such assignment or problem index */
             404: {
                 headers: {
                     [name: string]: unknown;

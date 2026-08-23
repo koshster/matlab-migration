@@ -400,3 +400,119 @@ export function useDeclineInvitation() {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Admin — assignments
+// ---------------------------------------------------------------------------
+
+type ProblemTypeInfo = components['schemas']['ProblemTypeInfo']
+type ParamFieldSpec = components['schemas']['ParamFieldSpec']
+type AdminAssignmentSummary = components['schemas']['AdminAssignmentSummary']
+type AdminAssignmentDetail = components['schemas']['AdminAssignmentDetail']
+type AdminProblemSlot = components['schemas']['AdminProblemSlot']
+type AssignmentCreateRequest = components['schemas']['AssignmentCreateRequest']
+type AssignmentUpdateRequest = components['schemas']['AssignmentUpdateRequest']
+
+export type {
+  ProblemTypeInfo,
+  ParamFieldSpec,
+  AdminAssignmentSummary,
+  AdminAssignmentDetail,
+  AdminProblemSlot,
+  AssignmentUpdateRequest,
+}
+
+const assignmentKeys = {
+  problemTypes: () => ['admin', 'problem-types'] as const,
+  list: (courseId: string) => ['admin', 'course', courseId, 'assignments'] as const,
+  detail: (id: string) => ['admin', 'assignment', id] as const,
+  preview: (id: string, index: number, seed: number) =>
+    ['admin', 'assignment', id, 'preview', index, seed] as const,
+}
+
+/** The catalogue the builder renders its difficulty form from. */
+export function useProblemTypes() {
+  return useQuery<ProblemTypeInfo[], ApiError>({
+    queryKey: assignmentKeys.problemTypes(),
+    queryFn: () => apiFetch('/api/v1/admin/problem-types'),
+    // The registry only changes on deploy.
+    staleTime: Infinity,
+  })
+}
+
+export function useCourseAssignments(courseId: string) {
+  return useQuery<AdminAssignmentSummary[], ApiError>({
+    queryKey: assignmentKeys.list(courseId),
+    queryFn: () => apiFetch(`/api/v1/admin/courses/${courseId}/assignments`),
+    enabled: !!courseId,
+  })
+}
+
+export function useAdminAssignment(assignmentId: string) {
+  return useQuery<AdminAssignmentDetail, ApiError>({
+    queryKey: assignmentKeys.detail(assignmentId),
+    queryFn: () => apiFetch(`/api/v1/admin/assignments/${assignmentId}`),
+    enabled: !!assignmentId,
+  })
+}
+
+export function useCreateAssignment(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<AdminAssignmentDetail, ApiError, AssignmentCreateRequest>({
+    mutationFn: (body) =>
+      apiFetch(`/api/v1/admin/courses/${courseId}/assignments`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: assignmentKeys.list(courseId) })
+    },
+  })
+}
+
+export function useUpdateAssignment(assignmentId: string, courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<AdminAssignmentDetail, ApiError, AssignmentUpdateRequest>({
+    mutationFn: (body) =>
+      apiFetch(`/api/v1/admin/assignments/${assignmentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (updated) => {
+      qc.setQueryData(assignmentKeys.detail(assignmentId), updated)
+      void qc.invalidateQueries({ queryKey: assignmentKeys.list(courseId) })
+      // Slot or param changes invalidate any cached preview.
+      void qc.invalidateQueries({ queryKey: ['admin', 'assignment', assignmentId, 'preview'] })
+    },
+  })
+}
+
+export function usePublishAssignment(assignmentId: string, courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<AdminAssignmentDetail, ApiError, boolean>({
+    mutationFn: (isPublished) =>
+      apiFetch(`/api/v1/admin/assignments/${assignmentId}/publish`, {
+        method: 'POST',
+        body: JSON.stringify({ isPublished }),
+      }),
+    onSuccess: (updated) => {
+      qc.setQueryData(assignmentKeys.detail(assignmentId), updated)
+      void qc.invalidateQueries({ queryKey: assignmentKeys.list(courseId) })
+    },
+  })
+}
+
+export function useAssignmentPreview(
+  assignmentId: string,
+  index: number | null,
+  seed: number,
+) {
+  return useQuery<ProblemPayload, ApiError>({
+    queryKey: assignmentKeys.preview(assignmentId, index ?? 0, seed),
+    queryFn: () =>
+      apiFetch(
+        `/api/v1/admin/assignments/${assignmentId}/preview/${String(index)}?seed=${String(seed)}`,
+      ),
+    enabled: !!assignmentId && index !== null,
+  })
+}
