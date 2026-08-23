@@ -157,6 +157,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/student/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Courses the student has accepted an invitation to */
+        get: operations["listStudentCourses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending course invitations for the signed-in student */
+        get: operations["listStudentInvitations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student/invitations/{entryId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a course invitation
+         * @description Idempotent: accepting an already-accepted invitation succeeds. Returns the joined course so the client can show it without a refetch.
+         */
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student/invitations/{entryId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a course invitation */
+        post: operations["declineInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{slug}": {
         parameters: {
             query?: never;
@@ -518,7 +589,45 @@ export interface components {
             email: string;
             role: components["schemas"]["CourseRole"];
         };
+        /** @description Minimal course identity, for grouping a student's assignments */
+        StudentCourseRef: {
+            /** Format: uuid */
+            id: string;
+            /** @example MAE-008 */
+            code: string;
+            /** @example Fall 2026 */
+            term: string;
+            /** @example Statics */
+            title: string;
+        };
+        StudentCourseSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            term: string;
+            section: string;
+            title: string;
+            instructorName: string;
+            assignmentCount: number;
+            /** Format: date-time */
+            enrolledAt: string;
+        };
+        StudentInvitation: {
+            /**
+             * Format: uuid
+             * @description Roster-entry id, used to accept or decline
+             */
+            id: string;
+            course: components["schemas"]["StudentCourseRef"];
+            /** @example Prof. Marko */
+            instructorName: string;
+            /** Format: date-time */
+            invitedAt: string;
+            /** @description Assignments waiting behind this invitation */
+            assignmentCount: number;
+        };
         StudentAssignmentListItem: {
+            course: components["schemas"]["StudentCourseRef"];
             slug: string;
             title: string;
             /** @enum {string} */
@@ -933,6 +1042,134 @@ export interface operations {
             };
             /** @description Not authenticated */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listStudentCourses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Course list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentCourseSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listStudentInvitations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending invitations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentInvitation"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal roster-entry UUID (never a PID — standing rule */
+                entryId: components["parameters"]["entryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation accepted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentCourseSummary"];
+                };
+            };
+            /** @description No pending invitation with that id for this student */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The invitation was already declined or the enrolment dropped */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    declineInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal roster-entry UUID (never a PID — standing rule */
+                entryId: components["parameters"]["entryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation declined */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description No pending invitation with that id for this student */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The invitation was already accepted */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

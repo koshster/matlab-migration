@@ -343,3 +343,60 @@ export function useAddCourseStaff(courseId: string) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Student — courses and invitations
+// ---------------------------------------------------------------------------
+
+type StudentInvitation = components['schemas']['StudentInvitation']
+type StudentCourseSummary = components['schemas']['StudentCourseSummary']
+
+export type { StudentInvitation, StudentCourseSummary }
+
+const studentKeys = {
+  invitations: () => ['student', 'invitations'] as const,
+  courses: () => ['student', 'courses'] as const,
+  assignments: () => ['student-assignments'] as const,
+}
+
+export function useStudentInvitations() {
+  return useQuery<StudentInvitation[], ApiError>({
+    queryKey: studentKeys.invitations(),
+    queryFn: () => apiFetch('/api/v1/student/invitations'),
+  })
+}
+
+export function useStudentCourses() {
+  return useQuery<StudentCourseSummary[], ApiError>({
+    queryKey: studentKeys.courses(),
+    queryFn: () => apiFetch('/api/v1/student/courses'),
+  })
+}
+
+/**
+ * Accepting is what makes a course's assignments visible, so the assignment
+ * list must be refetched alongside the invitation list.
+ */
+export function useAcceptInvitation() {
+  const qc = useQueryClient()
+  return useMutation<StudentCourseSummary, ApiError, string>({
+    mutationFn: (entryId) =>
+      apiFetch(`/api/v1/student/invitations/${entryId}/accept`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: studentKeys.invitations() })
+      void qc.invalidateQueries({ queryKey: studentKeys.courses() })
+      void qc.invalidateQueries({ queryKey: studentKeys.assignments() })
+    },
+  })
+}
+
+export function useDeclineInvitation() {
+  const qc = useQueryClient()
+  return useMutation<OkResponse, ApiError, string>({
+    mutationFn: (entryId) =>
+      apiFetch(`/api/v1/student/invitations/${entryId}/decline`, { method: 'POST' }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: studentKeys.invitations() })
+    },
+  })
+}

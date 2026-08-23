@@ -184,6 +184,90 @@ paths:
         "401":
           description: Not authenticated
 
+  /api/v1/student/courses:
+    get:
+      operationId: listStudentCourses
+      summary: Courses the student has accepted an invitation to
+      tags: [student]
+      responses:
+        "200":
+          description: Course list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentCourseSummary"
+        "401":
+          description: Not authenticated
+
+  # ---------------------------------------------------------------------------
+  # Student — course invitations
+  #
+  # An instructor can roster a student before they have an account. On
+  # registration the matching roster entry is claimed, and it surfaces here as a
+  # pending invitation. Assignments only become visible once accepted.
+  # Addressed by roster-entry UUID — never a PID (standing rule #7).
+  # ---------------------------------------------------------------------------
+
+  /api/v1/student/invitations:
+    get:
+      operationId: listStudentInvitations
+      summary: Pending course invitations for the signed-in student
+      tags: [student-invitations]
+      responses:
+        "200":
+          description: Pending invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentInvitation"
+        "401":
+          description: Not authenticated
+
+  /api/v1/student/invitations/{entryId}/accept:
+    post:
+      operationId: acceptInvitation
+      summary: Accept a course invitation
+      description: >
+        Idempotent: accepting an already-accepted invitation succeeds. Returns
+        the joined course so the client can show it without a refetch.
+      tags: [student-invitations]
+      parameters:
+        - $ref: "#/components/parameters/entryId"
+      responses:
+        "200":
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentCourseSummary"
+        "404":
+          description: No pending invitation with that id for this student
+        "409":
+          description: The invitation was already declined or the enrolment dropped
+
+  /api/v1/student/invitations/{entryId}/decline:
+    post:
+      operationId: declineInvitation
+      summary: Decline a course invitation
+      tags: [student-invitations]
+      parameters:
+        - $ref: "#/components/parameters/entryId"
+      responses:
+        "200":
+          description: Invitation declined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "404":
+          description: No pending invitation with that id for this student
+        "409":
+          description: The invitation was already accepted
+
   # ---------------------------------------------------------------------------
   # Assignments
   # ---------------------------------------------------------------------------
@@ -910,10 +994,77 @@ components:
         role:
           $ref: "#/components/schemas/CourseRole"
 
+    # -------------------------------------------------------------------------
+    # Student — courses and invitations
+    # -------------------------------------------------------------------------
+
+    StudentCourseRef:
+      type: object
+      description: Minimal course identity, for grouping a student's assignments
+      required: [id, code, term, title]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: MAE-008
+        term:
+          type: string
+          example: Fall 2026
+        title:
+          type: string
+          example: Statics
+
+    StudentCourseSummary:
+      type: object
+      required: [id, code, term, section, title, instructorName, assignmentCount, enrolledAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        term:
+          type: string
+        section:
+          type: string
+        title:
+          type: string
+        instructorName:
+          type: string
+        assignmentCount:
+          type: integer
+        enrolledAt:
+          type: string
+          format: date-time
+
+    StudentInvitation:
+      type: object
+      required: [id, course, instructorName, invitedAt, assignmentCount]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Roster-entry id, used to accept or decline
+        course:
+          $ref: "#/components/schemas/StudentCourseRef"
+        instructorName:
+          type: string
+          example: Prof. Marko
+        invitedAt:
+          type: string
+          format: date-time
+        assignmentCount:
+          type: integer
+          description: Assignments waiting behind this invitation
+
     StudentAssignmentListItem:
       type: object
-      required: [slug, title, status, score, dueAt, problemCount]
+      required: [slug, title, status, score, dueAt, problemCount, course]
       properties:
+        course:
+          $ref: "#/components/schemas/StudentCourseRef"
         slug:
           type: string
         title:

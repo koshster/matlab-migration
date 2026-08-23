@@ -15,7 +15,7 @@ const BASE = 'http://localhost:8000/api/v1'
 // Mutable in-memory state so the UI behaves like a real backend within a
 // session: adding to the roster, dropping a student, and the derived counts on
 // the course list all persist until reload.
-const courses: CourseSummary[] = structuredClone(adminCourses) as CourseSummary[]
+let courses: CourseSummary[] = structuredClone(adminCourses) as CourseSummary[]
 const rosterByCourse = new Map<string, RosterEntry[]>([
   [courses[0].id, structuredClone(adminRoster) as RosterEntry[]],
   [
@@ -41,6 +41,37 @@ const staffByCourse = new Map<string, CourseStaffMember[]>([
   [courses[1].id, [structuredClone(adminStaff)[0]] as CourseStaffMember[]],
   [courses[2].id, structuredClone(adminStaff) as CourseStaffMember[]],
 ])
+
+const SECOND_COURSE_ROSTER: RosterEntry[] = [
+  {
+    id: 'aaaaaaa2-0000-4000-8000-000000000001',
+    status: 'active',
+    pid: 'A98765432',
+    email: 'alan@ucsd.edu',
+    firstName: 'Alan',
+    lastName: 'Turing',
+    hasAccount: true,
+    invitedAt: '2026-08-03T10:00:00Z',
+    acceptedAt: '2026-08-03T18:22:00Z',
+  },
+]
+
+/**
+ * Restore the starting state. Module state persists across tests in a file, so
+ * a test that drops a student or imports a roster would otherwise change what
+ * later tests see.
+ */
+export function resetAdminMockState(): void {
+  courses = structuredClone(adminCourses) as CourseSummary[]
+  rosterByCourse.clear()
+  rosterByCourse.set(courses[0].id, structuredClone(adminRoster) as RosterEntry[])
+  rosterByCourse.set(courses[1].id, structuredClone(SECOND_COURSE_ROSTER))
+  rosterByCourse.set(courses[2].id, [])
+  staffByCourse.clear()
+  staffByCourse.set(courses[0].id, structuredClone(adminStaff) as CourseStaffMember[])
+  staffByCourse.set(courses[1].id, [structuredClone(adminStaff)[0]] as CourseStaffMember[])
+  staffByCourse.set(courses[2].id, structuredClone(adminStaff) as CourseStaffMember[])
+}
 
 let idCounter = 1000
 const nextId = (prefix: string) => `${prefix}-0000-4000-8000-${String(idCounter++).padStart(12, '0')}`
