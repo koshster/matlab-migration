@@ -13,12 +13,26 @@ async function enableMocking() {
   }
 }
 
+// Students and instructors have separate sessions and separate login screens,
+// so an expired session must clear the right one and land on the right page.
+// This previously always cleared `statics_session` and redirected to
+// /student/login, which bounced an instructor out of the admin area entirely.
+function handleUnauthorized() {
+  const onAdminRoute = window.location.pathname.startsWith('/admin')
+  if (onAdminRoute) {
+    sessionStorage.removeItem('instructor_session')
+    window.location.replace('/admin/login')
+    return
+  }
+  localStorage.removeItem('statics_session')
+  window.location.replace('/student/login')
+}
+
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
       if (error instanceof ApiError && error.status === 401) {
-        localStorage.removeItem('statics_session')
-        window.location.replace('/student/login')
+        handleUnauthorized()
       }
     },
   }),

@@ -71,6 +71,98 @@ paths:
         "401":
           description: Invalid credentials
 
+  /api/v1/auth/student/logout:
+    post:
+      operationId: logoutStudent
+      summary: Clear the student session cookie
+      tags: [student-auth]
+      responses:
+        "200":
+          description: Session cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  # ---------------------------------------------------------------------------
+  # Instructor auth
+  #
+  # Separate cookie and separate guard from the student routes: an instructor
+  # session must never satisfy a student route or vice versa (ADR 0009).
+  # ---------------------------------------------------------------------------
+
+  /api/v1/auth/instructor/register:
+    post:
+      operationId: registerInstructor
+      summary: Create an instructor account and start a session
+      tags: [instructor-auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstructorRegisterRequest"
+      responses:
+        "201":
+          description: Account created; session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstructorAuthResponse"
+        "409":
+          description: An account with that email already exists
+        "422":
+          description: Malformed email or password below the minimum length
+
+  /api/v1/auth/instructor/login:
+    post:
+      operationId: loginInstructor
+      summary: Authenticate an instructor by email and password
+      tags: [instructor-auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstructorLoginRequest"
+      responses:
+        "200":
+          description: Authenticated; session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstructorAuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /api/v1/auth/instructor/logout:
+    post:
+      operationId: logoutInstructor
+      summary: Clear the instructor session cookie
+      tags: [instructor-auth]
+      responses:
+        "200":
+          description: Session cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /api/v1/auth/instructor/me:
+    get:
+      operationId: readInstructorMe
+      summary: The signed-in instructor, resolved from the session cookie
+      tags: [instructor-auth]
+      responses:
+        "200":
+          description: Current instructor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstructorAuthResponse"
+        "401":
+          description: Not authenticated
+
   # ---------------------------------------------------------------------------
   # Student dashboard
   # ---------------------------------------------------------------------------
@@ -316,6 +408,63 @@ components:
         firstName:
           type: string
         lastName:
+          type: string
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    # -------------------------------------------------------------------------
+    # Instructor auth
+    # -------------------------------------------------------------------------
+
+    InstructorRegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          example: Prof. Marko
+        email:
+          type: string
+          description: Stored lowercased so lookups and roster matching agree
+          example: marko@ucsd.edu
+        password:
+          type: string
+          format: password
+          minLength: 8
+
+    InstructorLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: marko@ucsd.edu
+        password:
+          type: string
+          format: password
+
+    InstructorAuthResponse:
+      type: object
+      required: [instructor]
+      properties:
+        instructor:
+          $ref: "#/components/schemas/InstructorRecord"
+
+    InstructorRecord:
+      type: object
+      required: [id, name, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
           type: string
 
     StudentAssignmentListItem:
