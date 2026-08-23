@@ -170,10 +170,18 @@ class TrussGenerator:
         }
 
     def check(
-        self, seed: int, submission: AnswerSubmission, tolerance: float = 0.01
+        self,
+        seed: int,
+        submission: AnswerSubmission,
+        tolerance: float = 0.01,
+        params: dict[str, Any] | None = None,
     ) -> GradingResult:
-        """Stateless evaluation of student submission against ground truth solution."""
-        ground_truth = self.solve(seed)
+        """Stateless evaluation of student submission against ground truth solution.
+
+        `params` must match the call to `generate()`; omitting it previously
+        meant every submission was graded against the default 3-node truss.
+        """
+        ground_truth = self.solve(seed, params)
         member_solutions = ground_truth["member_solutions"]
 
         field_results: dict[str, FieldResult] = {}

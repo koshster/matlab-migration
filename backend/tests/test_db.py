@@ -59,8 +59,8 @@ async def test_full_course_and_assignment_lifecycle(
     # 3. Create Student & Enrollment
     student = Student(
         pid="A12345678",
-        email="student@ucsd.edu",
-        name="John Doe",
+        first_name="John",
+        last_name="Doe",
     )
     session.add(student)
     await session.flush()
@@ -76,6 +76,7 @@ async def test_full_course_and_assignment_lifecycle(
     # 4. Create Assignment with dynamic N problems
     assignment = Assignment(
         course_id=course.id,
+        slug="homework-1-trusses",
         title="Homework 1: Trusses",
         tolerance=0.01,
         scoring_strategy="pass_fail",

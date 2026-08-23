@@ -21,7 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/student/session": {
+    "/api/v1/auth/student/register": {
         parameters: {
             query?: never;
             header?: never;
@@ -30,8 +30,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start or restore a student session */
-        post: operations["createStudentSession"];
+        /** Create a student account and start a session */
+        post: operations["registerStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/student/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authenticate a student by PID and password */
+        post: operations["loginStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/student/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Assignments visible to the signed-in student */
+        get: operations["listStudentAssignments"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -150,35 +184,46 @@ export interface components {
             /** @example 0.1.0 */
             version: string;
         };
-        StudentSessionRequest: {
+        StudentRegisterRequest: {
             /**
              * @description Student PID (never appears in URLs or logs)
              * @example A12345678
              */
-            externalId: string;
+            pid: string;
             /** @example Koshik */
             firstName: string;
             /** @example Kumar */
             lastName: string;
-            /** @example truss-fall-2026 */
-            assignmentSlug: string;
+            /** Format: password */
+            password: string;
         };
-        StudentSessionResponse: {
-            student: {
-                /** Format: uuid */
-                id: string;
-                firstName: string;
-                lastName: string;
-            };
-            assignment: components["schemas"]["AssignmentSummary"];
+        StudentLoginRequest: {
+            /** @example A12345678 */
+            pid: string;
+            /** Format: password */
+            password: string;
         };
-        AlreadySubmittedError: {
+        StudentAuthResponse: {
+            student: components["schemas"]["StudentRecord"];
+        };
+        StudentRecord: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+        };
+        StudentAssignmentListItem: {
+            slug: string;
+            title: string;
             /** @enum {string} */
-            code: "ALREADY_SUBMITTED";
+            status: "not_started" | "in_progress" | "submitted";
+            score: {
+                earned: number;
+                total: number;
+            } | null;
             /** Format: date-time */
-            submittedAt: string;
-            score: number;
-            total: number;
+            dueAt: string | null;
+            problemCount: number;
         };
         AssignmentSummary: {
             slug: string;
@@ -360,7 +405,7 @@ export interface operations {
             };
         };
     };
-    createStudentSession: {
+    registerStudent: {
         parameters: {
             query?: never;
             header?: never;
@@ -369,27 +414,83 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StudentSessionRequest"];
+                "application/json": components["schemas"]["StudentRegisterRequest"];
             };
         };
         responses: {
-            /** @description Session created or restored */
+            /** @description Account created; session cookie set */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentAuthResponse"];
+                };
+            };
+            /** @description An account with that PID already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    loginStudent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated; session cookie set */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StudentSessionResponse"];
+                    "application/json": components["schemas"]["StudentAuthResponse"];
                 };
             };
-            /** @description Assignment already submitted */
-            409: {
+            /** @description Invalid credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listStudentAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment list */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlreadySubmittedError"];
+                    "application/json": components["schemas"]["StudentAssignmentListItem"][];
                 };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

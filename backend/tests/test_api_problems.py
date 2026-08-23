@@ -1,12 +1,52 @@
+import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.security import get_current_student_id
 from app.main import app
-from app.problems.truss.generator import truss_generator
+
+
+def _as_signed_in_student() -> None:
+    """These debug routes require a session; the cookie itself isn't under test."""
+    app.dependency_overrides[get_current_student_id] = lambda: uuid.uuid4()
+
+
+@pytest.fixture(autouse=True)
+def _clear_overrides():
+    yield
+    app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_problem_routes_require_a_session():
+    """Unauthenticated access would expose the generator to the open internet."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await client.get("/api/v1/problems/types")).status_code == 401
+        assert (
+            await client.post("/api/v1/problems/truss/generate", json={"seed": 42})
+        ).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_answer_oracle_route_is_gone():
+    """`POST /problems/{type}/check` graded a caller-supplied (seed, answers)
+    pair without recording an attempt, letting answers be brute-forced one
+    member at a time. It must stay deleted."""
+    _as_signed_in_student()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/problems/truss/check",
+            json={"seed": 100, "answers": {}, "tolerance": 0.01},
+        )
+        assert response.status_code in (404, 405)
 
 
 @pytest.mark.asyncio
 async def test_list_problem_types():
+    _as_signed_in_student()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/v1/problems/types")
@@ -18,6 +58,7 @@ async def test_list_problem_types():
 
 @pytest.mark.asyncio
 async def test_generate_truss_api():
+    _as_signed_in_student()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/api/v1/problems/truss/generate", json={"seed": 42})
@@ -32,25 +73,3 @@ async def test_generate_truss_api():
         serialized = str(data)
         assert "member_solutions" not in serialized
         assert "reactions" not in serialized
-
-
-@pytest.mark.asyncio
-async def test_check_truss_api():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        seed = 100
-        solution = truss_generator.solve(seed)
-
-        answers = {}
-        for member_key, mem_data in solution["member_solutions"].items():
-            answers[member_key] = mem_data["magnitude"]
-            answers[f"{member_key}_state"] = mem_data["state"]
-
-        response = await client.post(
-            "/api/v1/problems/truss/check",
-            json={"seed": seed, "answers": answers, "tolerance": 0.01},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["is_passed"] is True
-        assert data["score"] == 1.0

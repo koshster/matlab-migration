@@ -29,8 +29,8 @@ export default function TrussDiagram({ geometry }: { geometry: unknown }) {
 
   // Derive label size from shortest member so labels scale with diagram density
   const memberLengths = g.members.map((m) => {
-    const a = nodeMap.get(m.node1)
-    const b = nodeMap.get(m.node2)
+    const a = nodeMap.get(m.from)
+    const b = nodeMap.get(m.to)
     if (!a || !b) return Infinity
     return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
   })
@@ -59,24 +59,24 @@ export default function TrussDiagram({ geometry }: { geometry: unknown }) {
 
         {/* 1. Members (bottom layer) */}
         {g.members.map((m) => {
-          const from = nodeMap.get(m.node1)
-          const to = nodeMap.get(m.node2)
+          const from = nodeMap.get(m.from)
+          const to = nodeMap.get(m.to)
           if (!from || !to) return null
-          return <Member key={m.id} from={from} to={to} label={m.id} fontSize={labelSize} offset={labelOffset} centroid={centroid} />
+          return <Member key={m.id} from={from} to={to} label={m.label} fontSize={labelSize} offset={labelOffset} centroid={centroid} />
         })}
 
         {/* 2. Supports */}
         {g.supports.map((s, i) => {
-          const node = nodeMap.get(s.nodeId)
+          const node = nodeMap.get(s.node)
           if (!node) return null
           return s.type === 'pin'
-            ? <PinSupport key={i} x={node.x} y={node.y} angleDeg={0} />
-            : <RollerSupport key={i} x={node.x} y={node.y} angleDeg={0} />
+            ? <PinSupport key={i} x={node.x} y={node.y} angleDeg={s.angleDeg} />
+            : <RollerSupport key={i} x={node.x} y={node.y} angleDeg={s.angleDeg} />
         })}
 
         {/* 3. Force arrows */}
         {g.forces.map((f, i) => {
-          const node = nodeMap.get(f.nodeId)
+          const node = nodeMap.get(f.node)
           if (!node) return null
           return <ForceArrow key={i} node={node} fx={f.fx} fy={f.fy} label={f.label} fontSize={labelSize} />
         })}

@@ -34,6 +34,9 @@ services:
     volumes:
       - ./backend:/app
       - /app/.venv
+      # Contract fixtures are shared by MSW and pytest, so the backend needs
+      # them on the same relative path the frontend sees.
+      - ./packages:/packages:ro
 
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 

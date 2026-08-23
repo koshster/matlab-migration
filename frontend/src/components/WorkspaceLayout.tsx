@@ -10,14 +10,13 @@ import AnswerPanel from './AnswerPanel'
 import FeedbackPanel from './FeedbackPanel'
 import ActionBar from './ActionBar'
 
-const TOTAL_PROBLEMS = 8
-
 export default function WorkspaceLayout() {
   const { slug = '' } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const session = useSession()
 
-  const [currentIndex, setCurrentIndex] = useState(0)
+  // 1-based, matching the contract's problem index.
+  const [currentIndex, setCurrentIndex] = useState(1)
   const [answers, setAnswers] = useState<Record<string, number | null>>({})
   const [lastCheck, setLastCheck] = useState<CheckResult | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -30,6 +29,7 @@ export default function WorkspaceLayout() {
   const submitMutation = useSubmit(slug)
 
   const locked = assignment?.locked ?? false
+  const totalProblems = assignment?.problemCount ?? 0
 
   // Reset per-problem state when navigating
   useEffect(() => {
@@ -38,8 +38,9 @@ export default function WorkspaceLayout() {
   }, [currentIndex, problem?.savedAnswers])
 
   function navigate_problem(index: number) {
-    // Wrap: -1 → 7, 8 → 0
-    const next = ((index % TOTAL_PROBLEMS) + TOTAL_PROBLEMS) % TOTAL_PROBLEMS
+    // Wrap within 1..totalProblems (e.g. 0 → last, total+1 → 1)
+    if (totalProblems < 1) return
+    const next = ((((index - 1) % totalProblems) + totalProblems) % totalProblems) + 1
     setCurrentIndex(next)
   }
 

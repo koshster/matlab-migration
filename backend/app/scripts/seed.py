@@ -1,11 +1,11 @@
 """Seed script: creates instructor, course, assignments, and a demo student."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from passlib.context import CryptContext
 from sqlalchemy import select
 
+from app.core.security import hash_password
 from app.db.models import (
     Assignment,
     AssignmentProblem,
@@ -17,20 +17,20 @@ from app.db.models import (
 )
 from app.db.session import async_session_factory
 
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
 
 async def seed() -> None:
     async with async_session_factory() as db:
         # ------------------------------------------------------------------
         # Instructor
         # ------------------------------------------------------------------
-        result = await db.execute(select(Instructor).where(Instructor.email == "marko@university.edu"))
-        instructor = result.scalar_one_or_none()
+        instructor_row = await db.execute(
+            select(Instructor).where(Instructor.email == "marko@university.edu")
+        )
+        instructor = instructor_row.scalar_one_or_none()
         if instructor is None:
             instructor = Instructor(
                 email="marko@university.edu",
-                password_hash=pwd_context.hash("statics2026"),
+                password_hash=hash_password("statics2026"),
                 name="Prof. Marko",
             )
             db.add(instructor)
@@ -42,10 +42,10 @@ async def seed() -> None:
         # ------------------------------------------------------------------
         # Course
         # ------------------------------------------------------------------
-        result = await db.execute(
+        course_row = await db.execute(
             select(Course).where(Course.code == "ENGR301", Course.term == "Fall 2026")
         )
-        course = result.scalar_one_or_none()
+        course = course_row.scalar_one_or_none()
         if course is None:
             course = Course(instructor_id=instructor.id, code="ENGR301", term="Fall 2026")
             db.add(course)
@@ -62,8 +62,10 @@ async def seed() -> None:
             title: str,
             due_at: datetime | None = None,
         ) -> tuple[Assignment, list[AssignmentProblem]]:
-            result = await db.execute(select(Assignment).where(Assignment.slug == slug))
-            a = result.scalar_one_or_none()
+            assignment_row = await db.execute(
+                select(Assignment).where(Assignment.slug == slug)
+            )
+            a = assignment_row.scalar_one_or_none()
             if a is None:
                 a = Assignment(
                     course_id=course.id,
@@ -94,23 +96,23 @@ async def seed() -> None:
                     db.add(a)
                     await db.flush()
 
-            result = await db.execute(
+            problem_rows = await db.execute(
                 select(AssignmentProblem)
                 .where(AssignmentProblem.assignment_id == a.id)
                 .order_by(AssignmentProblem.order_index)
             )
-            problems = list(result.scalars().all())
+            problems = list(problem_rows.scalars().all())
             return a, problems
 
         a1, a1_probs = await get_or_create_assignment(
             "truss-fall-2026",
             "Truss Analysis — Fall 2026",
-            due_at=datetime(2026, 12, 15, 23, 59, tzinfo=timezone.utc),
+            due_at=datetime(2026, 12, 15, 23, 59, tzinfo=UTC),
         )
         a2, _ = await get_or_create_assignment(
             "truss-quiz-week8",
             "Truss Review Quiz — Week 8",
-            due_at=datetime(2026, 10, 30, 23, 59, tzinfo=timezone.utc),
+            due_at=datetime(2026, 10, 30, 23, 59, tzinfo=UTC),
         )
         a3, a3_probs = await get_or_create_assignment(
             "truss-practice-final",
@@ -120,14 +122,14 @@ async def seed() -> None:
         # ------------------------------------------------------------------
         # Demo student
         # ------------------------------------------------------------------
-        result = await db.execute(select(Student).where(Student.pid == "demo001"))
-        student = result.scalar_one_or_none()
+        student_row = await db.execute(select(Student).where(Student.pid == "demo001"))
+        student = student_row.scalar_one_or_none()
         if student is None:
             student = Student(
                 pid="demo001",
                 first_name="Demo",
                 last_name="Student",
-                password_hash=pwd_context.hash("demo1234"),
+                password_hash=hash_password("demo1234"),
             )
             db.add(student)
             await db.flush()
@@ -138,13 +140,13 @@ async def seed() -> None:
         # ------------------------------------------------------------------
         # StudentAssignment 1: truss-fall-2026 → in_progress
         # ------------------------------------------------------------------
-        result = await db.execute(
+        sa1_row = await db.execute(
             select(StudentAssignment).where(
                 StudentAssignment.student_id == student.id,
                 StudentAssignment.assignment_id == a1.id,
             )
         )
-        sa1 = result.scalar_one_or_none()
+        sa1 = sa1_row.scalar_one_or_none()
         if sa1 is None:
             sa1 = StudentAssignment(
                 student_id=student.id,
@@ -177,13 +179,13 @@ async def seed() -> None:
         # ------------------------------------------------------------------
         # StudentAssignment 2: truss-quiz-week8 → not_started
         # ------------------------------------------------------------------
-        result = await db.execute(
+        sa2_row = await db.execute(
             select(StudentAssignment).where(
                 StudentAssignment.student_id == student.id,
                 StudentAssignment.assignment_id == a2.id,
             )
         )
-        sa2 = result.scalar_one_or_none()
+        sa2 = sa2_row.scalar_one_or_none()
         if sa2 is None:
             sa2 = StudentAssignment(
                 student_id=student.id,
@@ -200,15 +202,15 @@ async def seed() -> None:
         # ------------------------------------------------------------------
         # StudentAssignment 3: truss-practice-final → submitted, 6/8 correct
         # ------------------------------------------------------------------
-        result = await db.execute(
+        sa3_row = await db.execute(
             select(StudentAssignment).where(
                 StudentAssignment.student_id == student.id,
                 StudentAssignment.assignment_id == a3.id,
             )
         )
-        sa3 = result.scalar_one_or_none()
+        sa3 = sa3_row.scalar_one_or_none()
         if sa3 is None:
-            submitted_at = datetime(2026, 8, 10, 14, 30, tzinfo=timezone.utc)
+            submitted_at = datetime(2026, 8, 10, 14, 30, tzinfo=UTC)
             sa3 = StudentAssignment(
                 student_id=student.id,
                 assignment_id=a3.id,

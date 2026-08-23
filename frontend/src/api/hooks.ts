@@ -4,15 +4,23 @@ import apiFetch, { ApiError } from './client'
 
 type AssignmentSummary = components['schemas']['AssignmentSummary']
 type ProblemPayload = components['schemas']['ProblemPayload']
-type StudentSessionRequest = components['schemas']['StudentSessionRequest']
-type StudentSessionResponse = components['schemas']['StudentSessionResponse']
 type AnswersRequest = components['schemas']['AnswersRequest']
 export type { ApiError }
 type SavedResponse = components['schemas']['SavedResponse']
 type CheckResult = components['schemas']['CheckResult']
 type SubmissionResult = components['schemas']['SubmissionResult']
+type StudentLoginRequest = components['schemas']['StudentLoginRequest']
+type StudentRegisterRequest = components['schemas']['StudentRegisterRequest']
+type StudentAuthResponse = components['schemas']['StudentAuthResponse']
+type StudentAssignmentItem = components['schemas']['StudentAssignmentListItem']
 
-export type { AssignmentSummary, ProblemPayload, CheckResult, SubmissionResult }
+export type {
+  AssignmentSummary,
+  ProblemPayload,
+  CheckResult,
+  SubmissionResult,
+  StudentAssignmentItem,
+}
 
 // ---------------------------------------------------------------------------
 // Keys
@@ -24,34 +32,11 @@ const keys = {
 }
 
 // ---------------------------------------------------------------------------
-// Student session (legacy — kept for MSW compatibility)
+// Student auth
 // ---------------------------------------------------------------------------
-export function useStudentSession() {
-  return useMutation<StudentSessionResponse, ApiError, StudentSessionRequest>({
-    mutationFn: (body) =>
-      apiFetch('/api/v1/auth/student/session', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Student auth (new secure endpoints)
-// ---------------------------------------------------------------------------
-
-interface StudentRecord {
-  id: string
-  firstName: string
-  lastName: string
-}
-
-interface StudentAuthResponse {
-  student: StudentRecord
-}
 
 export function useStudentLogin() {
-  return useMutation<StudentAuthResponse, ApiError, { pid: string; password: string }>({
+  return useMutation<StudentAuthResponse, ApiError, StudentLoginRequest>({
     mutationFn: (body) =>
       apiFetch('/api/v1/auth/student/login', {
         method: 'POST',
@@ -61,7 +46,7 @@ export function useStudentLogin() {
 }
 
 export function useStudentRegister() {
-  return useMutation<StudentAuthResponse, ApiError, { pid: string; firstName: string; lastName: string; password: string }>({
+  return useMutation<StudentAuthResponse, ApiError, StudentRegisterRequest>({
     mutationFn: (body) =>
       apiFetch('/api/v1/auth/student/register', {
         method: 'POST',
@@ -73,15 +58,6 @@ export function useStudentRegister() {
 // ---------------------------------------------------------------------------
 // Student assignment list (dashboard)
 // ---------------------------------------------------------------------------
-
-export interface StudentAssignmentItem {
-  slug: string
-  title: string
-  status: 'not_started' | 'in_progress' | 'submitted'
-  score: { earned: number; total: number } | null
-  dueAt: string | null
-  problemCount: number
-}
 
 export function useStudentAssignments() {
   return useQuery<StudentAssignmentItem[]>({
@@ -203,7 +179,7 @@ export function useInstructorRegister() {
 }
 
 export function useInstructorLogout() {
-  return useMutation<{ ok: boolean }, ApiError, void>({
+  return useMutation<{ ok: boolean }, ApiError>({
     mutationFn: () =>
       apiFetch('/api/v1/auth/instructor/logout', { method: 'POST' }),
   })
