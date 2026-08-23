@@ -132,6 +132,18 @@ def _build_answer_schema(members: list[dict[str, Any]]) -> dict[str, Any]:
     return {"groups": [{"id": "member-forces", "label": "Member Forces", "fields": fields}]}
 
 
+def _generator_params(ap: AssignmentProblem, index: int) -> dict[str, Any]:
+    """Build the generator params for a problem slot.
+
+    `problem_id` (the 1-based wire index) only seeds the legacy
+    `[3,3,4,4,5,5,6,6]` node-count schedule as a fallback. Stored
+    `assignment_problems.params` come last so they win — that column is the
+    source of truth for problem configuration (ADR 0015), and until now it was
+    written by the seed but never read.
+    """
+    return {"problem_id": index, **(ap.params or {})}
+
+
 def _resolve_slot(assignment: Assignment, index: int) -> tuple[int, AssignmentProblem]:
     """Map a 1-based wire index to its 0-based slot and problem row.
 
@@ -300,7 +312,8 @@ async def get_problem(
 
     generator = problem_registry.get(ap.problem_type)
     seed = _effective_seed(sa, slot)
-    display = generator.generate(seed=seed, params={"problem_id": index})
+    params = _generator_params(ap, index)
+    display = generator.generate(seed=seed, params=params)
 
     geometry = _build_truss_geometry(display.visual_schema)
     answer_schema = _build_answer_schema(geometry["members"])
@@ -369,12 +382,15 @@ async def check_answers(
 
     generator = problem_registry.get(ap.problem_type)
     seed = _effective_seed(sa, slot)
+    params = _generator_params(ap, index)
 
-    display = generator.generate(seed=seed, params={"problem_id": index})
+    display = generator.generate(seed=seed, params=params)
     geometry = _build_truss_geometry(display.visual_schema)
     members = geometry["members"]
 
-    ground_truth = generator.solve(seed=seed, params={"problem_id": index})
+    # Same seed and same params as generate(), or the student would be graded
+    # against a different truss than the one they were shown.
+    ground_truth = generator.solve(seed=seed, params=params)
     member_solutions = ground_truth["member_solutions"]
 
     per_field = _check_answers(body.answers, member_solutions, members, assignment.tolerance)

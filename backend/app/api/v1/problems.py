@@ -1,17 +1,18 @@
 import random
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 import app.problems  # noqa: F401
-from app.problems.base import (
-    AnswerSubmission,
-    GradingResult,
-    ProblemDisplayData,
-)
+from app.core.security import get_current_student_id
+from app.problems.base import ProblemDisplayData
 from app.problems.registry import problem_registry
 
+# These are introspection/debug routes, not part of the student workflow. They
+# require a session so they are not open to the internet; Phase C should move
+# them behind instructor auth, since only the admin builder needs them.
 router = APIRouter(prefix="/problems", tags=["problems"])
 
 
@@ -27,21 +28,10 @@ class GenerateProblemRequest(BaseModel):
     )
 
 
-class CheckAnswerRequest(BaseModel):
-    """Request payload to grade a student submission."""
-
-    seed: int = Field(..., description="Integer seed corresponding to the problem instance")
-    answers: dict[str, Any] = Field(
-        ..., description="Dictionary mapping field_id to submitted value"
-    )
-    tolerance: float = Field(
-        default=0.01,
-        description="Acceptable relative grading tolerance (default: 0.01 = 1%)",
-    )
-
-
 @router.get("/types", summary="List all supported problem types")
-async def list_problem_types() -> dict[str, list[str]]:
+async def list_problem_types(
+    _student_id: uuid.UUID = Depends(get_current_student_id),
+) -> dict[str, list[str]]:
     """Returns a list of all problem domain generators currently registered."""
     return {"problem_types": problem_registry.list_types()}
 
@@ -52,7 +42,9 @@ async def list_problem_types() -> dict[str, list[str]]:
     summary="Generate problem geometry and input schema",
 )
 async def generate_problem(
-    problem_type: str, request: GenerateProblemRequest | None = None
+    problem_type: str,
+    request: GenerateProblemRequest | None = None,
+    _student_id: uuid.UUID = Depends(get_current_student_id),
 ) -> ProblemDisplayData:
     """Generate problem visual elements and form input fields without exposing solutions."""
     try:
@@ -72,20 +64,10 @@ async def generate_problem(
     return generator.generate(seed=seed, params=params)
 
 
-@router.post(
-    "/{problem_type}/check",
-    response_model=GradingResult,
-    summary="Evaluate student answers against ground truth",
-)
-async def check_problem_answer(problem_type: str, request: CheckAnswerRequest) -> GradingResult:
-    """Statelessly solve problem server-side using the seed and grade student submission."""
-    try:
-        generator = problem_registry.get(problem_type)
-    except KeyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Problem type '{problem_type}' not found.",
-        ) from exc
-
-    submission = AnswerSubmission(answers=request.answers)
-    return generator.check(seed=request.seed, submission=submission, tolerance=request.tolerance)
+# NOTE: there is deliberately no `POST /{problem_type}/check` route.
+# Grading a caller-supplied (seed, answers) pair is an answer oracle: it reports
+# per-field correctness without recording an attempt, so answers can be
+# brute-forced one member at a time. Real grading goes through
+# `POST /assignments/{slug}/problems/{index}/check`, which is scoped to the
+# student's own seed and writes a Submission row. `TrussGenerator.check` is
+# still covered directly in tests/test_problems.py.

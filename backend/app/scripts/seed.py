@@ -3,9 +3,9 @@
 import asyncio
 from datetime import UTC, datetime
 
-from passlib.context import CryptContext
 from sqlalchemy import select
 
+from app.core.security import hash_password
 from app.db.models import (
     Assignment,
     AssignmentProblem,
@@ -16,8 +16,6 @@ from app.db.models import (
     Submission,
 )
 from app.db.session import async_session_factory
-
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 async def seed() -> None:
@@ -32,7 +30,7 @@ async def seed() -> None:
         if instructor is None:
             instructor = Instructor(
                 email="marko@university.edu",
-                password_hash=pwd_context.hash("statics2026"),
+                password_hash=hash_password("statics2026"),
                 name="Prof. Marko",
             )
             db.add(instructor)
@@ -131,7 +129,7 @@ async def seed() -> None:
                 pid="demo001",
                 first_name="Demo",
                 last_name="Student",
-                password_hash=pwd_context.hash("demo1234"),
+                password_hash=hash_password("demo1234"),
             )
             db.add(student)
             await db.flush()

@@ -2,19 +2,16 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import create_student_token
+from app.core.security import create_student_token, hash_password, verify_password
 from app.db.models import Student
 from app.db.session import get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-pwd_context = CryptContext(schemes=["argon2"])
 
 
 class StudentRegisterRequest(BaseModel):
@@ -62,7 +59,7 @@ async def register_student(
         pid=body.pid,
         first_name=body.firstName,
         last_name=body.lastName,
-        password_hash=pwd_context.hash(body.password),
+        password_hash=hash_password(body.password),
     )
     db.add(student)
     await db.commit()
@@ -86,7 +83,7 @@ async def login_student(
     if (
         student is None
         or student.password_hash is None
-        or not pwd_context.verify(body.password, student.password_hash)
+        or not verify_password(body.password, student.password_hash)
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 

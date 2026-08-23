@@ -98,7 +98,15 @@ class ProblemGeneratorProtocol(Protocol):
         ...
 
     def check(
-        self, seed: int, submission: AnswerSubmission, tolerance: float = 0.01
+        self,
+        seed: int,
+        submission: AnswerSubmission,
+        tolerance: float = 0.01,
+        params: dict[str, Any] | None = None,
     ) -> GradingResult:
-        """Statelessly regenerate ground truth and evaluate student submission."""
+        """Statelessly regenerate ground truth and evaluate student submission.
+
+        `params` must match what was passed to `generate()`, otherwise the
+        submission is graded against a different problem instance.
+        """
         ...
