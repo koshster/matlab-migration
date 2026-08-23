@@ -3,6 +3,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,12 +16,45 @@ from app.db.session import get_db
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+pwd_context = CryptContext(schemes=["argon2"])
+
 
 class StudentSessionRequest(BaseModel):
     externalId: str
     firstName: str
     lastName: str
     assignmentSlug: str
+
+
+class StudentRegisterRequest(BaseModel):
+    pid: str
+    firstName: str
+    lastName: str
+    password: str
+
+
+class StudentLoginRequest(BaseModel):
+    pid: str
+    password: str
+
+
+def _set_student_cookie(response: Response, student_id: uuid.UUID) -> None:
+    response.set_cookie(
+        key="student_session",
+        value=create_student_token(student_id),
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=settings.jwt_expire_minutes * 60,
+    )
+
+
+def _student_out(student: Student) -> dict[str, Any]:
+    return {
+        "id": str(student.id),
+        "firstName": student.first_name,
+        "lastName": student.last_name,
+    }
 
 
 def _build_assignment_summary(
@@ -77,13 +111,58 @@ def _build_assignment_summary(
     }
 
 
+@router.post("/student/register", status_code=status.HTTP_201_CREATED)
+async def register_student(
+    body: StudentRegisterRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    result = await db.execute(select(Student).where(Student.pid == body.pid))
+    if result.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="PID already registered")
+
+    student = Student(
+        pid=body.pid,
+        first_name=body.firstName,
+        last_name=body.lastName,
+        password_hash=pwd_context.hash(body.password),
+    )
+    db.add(student)
+    await db.commit()
+    await db.refresh(student)
+
+    _set_student_cookie(response, student.id)
+    return {"student": _student_out(student)}
+
+
+@router.post("/student/login")
+async def login_student(
+    body: StudentLoginRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    result = await db.execute(select(Student).where(Student.pid == body.pid))
+    student = result.scalar_one_or_none()
+
+    invalid = (
+        student is None
+        or student.password_hash is None
+        or not pwd_context.verify(body.password, student.password_hash)
+    )
+    if invalid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    _set_student_cookie(response, student.id)  # type: ignore[union-attr]
+    return {"student": _student_out(student)}  # type: ignore[union-attr]
+
+
 @router.post("/student/session")
 async def create_student_session(
     body: StudentSessionRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    # Find or create student
+    # Find or create student (legacy PID-only flow — no password required)
     result = await db.execute(select(Student).where(Student.pid == body.externalId))
     student = result.scalar_one_or_none()
     if student is None:
@@ -150,22 +229,10 @@ async def create_student_session(
             },
         )
 
-    token = create_student_token(student.id, student_assignment.id)
-    response.set_cookie(
-        key="student_session",
-        value=token,
-        httponly=True,
-        samesite="lax",
-        secure=False,
-        max_age=settings.jwt_expire_minutes * 60,
-    )
+    _set_student_cookie(response, student.id)
 
     summary = _build_assignment_summary(assignment, student_assignment, submissions)
     return {
-        "student": {
-            "id": str(student.id),
-            "firstName": student.first_name,
-            "lastName": student.last_name,
-        },
+        "student": _student_out(student),
         "assignment": summary,
     }

@@ -18,7 +18,7 @@ const queryClient = new QueryClient({
     onError: (error) => {
       if (error instanceof ApiError && error.status === 401) {
         localStorage.removeItem('statics_session')
-        window.location.replace('/')
+        window.location.replace('/student/login')
       }
     },
   }),

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.security import get_current_student
+from app.core.security import get_current_student_id
 from app.db.models import Assignment, AssignmentProblem, Student, StudentAssignment, Submission
 from app.db.session import get_db
 from app.problems.registry import problem_registry
@@ -178,10 +178,9 @@ def _assignment_summary(
 
 async def _get_context(
     slug: str,
-    student_ids: tuple[uuid.UUID, uuid.UUID] = Depends(get_current_student),
+    student_id: uuid.UUID = Depends(get_current_student_id),
     db: AsyncSession = Depends(get_db),
 ) -> tuple[Student, StudentAssignment, Assignment]:
-    student_id, student_assignment_id = student_ids
     result = await db.execute(select(Student).where(Student.id == student_id))
     student = result.scalar_one_or_none()
     if not student:
@@ -197,11 +196,21 @@ async def _get_context(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
     result = await db.execute(
-        select(StudentAssignment).where(StudentAssignment.id == student_assignment_id)
+        select(StudentAssignment).where(
+            StudentAssignment.student_id == student_id,
+            StudentAssignment.assignment_id == assignment.id,
+        )
     )
     sa = result.scalar_one_or_none()
-    if not sa or sa.assignment_id != assignment.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enrolled")
+    if sa is None:
+        sa = StudentAssignment(
+            student_id=student_id,
+            assignment_id=assignment.id,
+            seed=random.randint(1, 10_000_000),
+            draft_answers={},
+        )
+        db.add(sa)
+        await db.flush()
 
     return student, sa, assignment
 
