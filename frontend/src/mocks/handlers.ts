@@ -21,14 +21,6 @@ const problemByIndex = (index: number) => {
 const checkCounts: Record<number, number> = {}
 
 export const handlers = [
-  // Student session — always succeeds in dev
-  http.post(`${BASE}/auth/student/session`, () => {
-    return HttpResponse.json({
-      student: { id: 'mock-student-uuid', firstName: 'Demo', lastName: 'Student' },
-      assignment: assignmentSummary,
-    })
-  }),
-
   // Assignment summary
   http.get(`${BASE}/assignments/:slug`, () => {
     return HttpResponse.json(assignmentSummary)

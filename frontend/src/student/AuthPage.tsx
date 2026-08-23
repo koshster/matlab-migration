@@ -51,7 +51,14 @@ export default function StudentAuthPage() {
       setPasswordMismatch(true)
       return
     }
-    const { confirmPassword: _, ...body } = registerFields
+    // Built explicitly so confirmPassword — or any field added to the form
+    // later — can never be sent to the API by accident.
+    const body = {
+      pid: registerFields.pid,
+      firstName: registerFields.firstName,
+      lastName: registerFields.lastName,
+      password: registerFields.password,
+    }
     registerMutation.mutate(body, {
       onSuccess: (data) => {
         setSession({ studentId: data.student.id, firstName: data.student.firstName, lastName: data.student.lastName })

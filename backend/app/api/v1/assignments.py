@@ -1,14 +1,15 @@
+import random
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-import app.problems  # noqa: F401 — triggers registry registration
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+import app.problems  # noqa: F401 — triggers registry registration
 from app.core.security import get_current_student_id
 from app.db.models import Assignment, AssignmentProblem, Student, StudentAssignment, Submission
 from app.db.session import get_db
@@ -33,26 +34,52 @@ def _effective_seed(student_assignment: StudentAssignment, index: int) -> int:
     return student_assignment.seed + index
 
 
+_SUBSCRIPT_DIGITS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+
+def member_field_key(member_id: int) -> str:
+    """Answer-field key for a member, e.g. 1 -> 'S1'. Stable across releases."""
+    return f"S{member_id}"
+
+
+def _member_label(member_id: int) -> str:
+    """Display label for a member, e.g. 1 -> 'S₁'."""
+    return "S" + str(member_id).translate(_SUBSCRIPT_DIGITS)
+
+
 def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
+    """Translate generator primitives into the contract's TrussGeometry shape.
+
+    Node and member ids are 1-based on the wire; the generator emits 0-based
+    node indices, so every node reference is offset by one here.
+    """
     nodes, members, supports, forces = [], [], [], []
     member_idx = 0
     for el in visual_schema:
         p = el.properties
         t = el.element_type
         if t == "node":
-            nodes.append({"id": p["id"], "x": p["x"], "y": p["y"]})
+            nodes.append({"id": int(p["id"]) + 1, "x": p["x"], "y": p["y"]})
         elif t == "member":
             member_idx += 1
-            members.append({"id": f"S{member_idx}", "node1": p["start_node"], "node2": p["end_node"]})
-        elif t == "pin":
-            supports.append({"nodeId": p["node_index"], "type": "pin"})
-        elif t == "roller":
-            supports.append({"nodeId": p["node_index"], "type": "roller"})
+            members.append({
+                "id": member_idx,
+                "from": int(p["start_node"]) + 1,
+                "to": int(p["end_node"]) + 1,
+                "label": _member_label(member_idx),
+            })
+        elif t in ("pin", "roller"):
+            supports.append({
+                "node": int(p["node_index"]) + 1,
+                "type": t,
+                # Pins always sit base-down; rollers carry an outward rotation.
+                "angleDeg": int(p.get("rotation", 0)),
+            })
         elif t == "point_load":
             fv = p["force_vector"]
             mag = (fv[0] ** 2 + fv[1] ** 2) ** 0.5
             forces.append({
-                "nodeId": p["node_index"],
+                "node": int(p["node_index"]) + 1,
                 "fx": float(fv[0]),
                 "fy": float(fv[1]),
                 "label": f"{mag:.1f}F",
@@ -62,7 +89,8 @@ def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
         xs = [n["x"] for n in nodes]
         ys = [n["y"] for n in nodes]
         raw_range = max(max(xs) - min(xs), max(ys) - min(ys))
-        # Normalize so the largest span is 4 SVG units; SVG components are sized for ~4-unit geometry
+        # Normalize so the largest span is 4 SVG units; the SVG
+        # sub-components are sized for ~4-unit geometry.
         scale = 4.0 / raw_range if raw_range > 0.01 else 1.0
         for n in nodes:
             n["x"] = round(n["x"] * scale, 4)
@@ -80,15 +108,44 @@ def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
     else:
         bounds = {"xMin": -1, "xMax": 1, "yMin": -1, "yMax": 1}
 
-    return {"nodes": nodes, "members": members, "supports": supports, "forces": forces, "bounds": bounds}
+    return {
+        "schemaVersion": 1,
+        "nodes": nodes,
+        "members": members,
+        "supports": supports,
+        "forces": forces,
+        "bounds": bounds,
+    }
 
 
 def _build_answer_schema(members: list[dict[str, Any]]) -> dict[str, Any]:
     fields = [
-        {"key": m["id"], "label": m["id"], "unit": "F", "type": "number", "decimals": 2}
+        {
+            "key": member_field_key(m["id"]),
+            "label": m["label"],
+            "unit": "F",
+            "type": "number",
+            "decimals": 2,
+        }
         for m in members
     ]
-    return {"groups": [{"label": "Member Forces", "fields": fields}]}
+    return {"groups": [{"id": "member-forces", "label": "Member Forces", "fields": fields}]}
+
+
+def _resolve_slot(assignment: Assignment, index: int) -> tuple[int, AssignmentProblem]:
+    """Map a 1-based wire index to its 0-based slot and problem row.
+
+    The wire is 1-based (contract: `index minimum: 1`); `order_index`, the
+    per-problem seed offset, and draft-answer keys all stay 0-based so existing
+    student data keeps generating the same problems.
+    """
+    problems_sorted = sorted(assignment.problems, key=lambda p: p.order_index)
+    slot = index - 1
+    if slot < 0 or slot >= len(problems_sorted):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Problem index out of range"
+        )
+    return slot, problems_sorted[slot]
 
 
 def _member_key_order(member_solutions: dict[str, Any]) -> list[str]:
@@ -106,7 +163,7 @@ def _check_answers(
     keys = _member_key_order(member_solutions)
     per_field: dict[str, bool] = {}
     for i, m in enumerate(members):
-        sid = m["id"]  # "S1", "S2", ...
+        sid = member_field_key(m["id"])  # "S1", "S2", ...
         if i >= len(keys):
             per_field[sid] = False
             continue
@@ -132,7 +189,7 @@ def _problem_summary(
     else:
         prob_status = "incorrect"
     return {
-        "index": ap.order_index,
+        "index": ap.order_index + 1,
         "problemType": ap.problem_type,
         "status": prob_status,
         "attemptCount": attempt_count,
@@ -149,11 +206,8 @@ def _assignment_summary(
         for ap in sorted(assignment.problems, key=lambda p: p.order_index)
     ]
     locked = bool(student_assignment.submitted_at)
-    assign_status = (
-        "submitted"
-        if locked
-        else ("in_progress" if any(p["status"] != "no_attempt" for p in problems) else "not_started")
-    )
+    started = any(p["status"] != "no_attempt" for p in problems)
+    assign_status = "submitted" if locked else "in_progress" if started else "not_started"
     score = None
     if locked:
         earned = sum(1 for p in problems if p["status"] == "correct")
@@ -181,27 +235,27 @@ async def _get_context(
     student_id: uuid.UUID = Depends(get_current_student_id),
     db: AsyncSession = Depends(get_db),
 ) -> tuple[Student, StudentAssignment, Assignment]:
-    result = await db.execute(select(Student).where(Student.id == student_id))
-    student = result.scalar_one_or_none()
+    student_row = await db.execute(select(Student).where(Student.id == student_id))
+    student = student_row.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Student not found")
 
-    result = await db.execute(
+    assignment_row = await db.execute(
         select(Assignment)
         .where(Assignment.slug == slug)
         .options(selectinload(Assignment.problems))
     )
-    assignment = result.scalar_one_or_none()
+    assignment = assignment_row.scalar_one_or_none()
     if not assignment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
 
-    result = await db.execute(
+    sa_row = await db.execute(
         select(StudentAssignment).where(
             StudentAssignment.student_id == student_id,
             StudentAssignment.assignment_id == assignment.id,
         )
     )
-    sa = result.scalar_one_or_none()
+    sa = sa_row.scalar_one_or_none()
     if sa is None:
         sa = StudentAssignment(
             student_id=student_id,
@@ -242,14 +296,11 @@ async def get_problem(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     _, sa, assignment = ctx
-    problems_sorted = sorted(assignment.problems, key=lambda p: p.order_index)
-    if index < 0 or index >= len(problems_sorted):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem index out of range")
+    slot, ap = _resolve_slot(assignment, index)
 
-    ap = problems_sorted[index]
     generator = problem_registry.get(ap.problem_type)
-    seed = _effective_seed(sa, index)
-    display = generator.generate(seed=seed, params={"problem_id": index + 1})
+    seed = _effective_seed(sa, slot)
+    display = generator.generate(seed=seed, params={"problem_id": index})
 
     geometry = _build_truss_geometry(display.visual_schema)
     answer_schema = _build_answer_schema(geometry["members"])
@@ -265,7 +316,7 @@ async def get_problem(
     attempt_count = len(subs)
     locked = bool(sa.submitted_at)
 
-    saved_answers = (sa.draft_answers or {}).get(str(index), {})
+    saved_answers = (sa.draft_answers or {}).get(str(slot), {})
 
     return {
         "schemaVersion": 1,
@@ -292,14 +343,15 @@ async def save_answers(
     ctx: tuple[Student, StudentAssignment, Assignment] = Depends(_get_context),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    _, sa, _ = ctx
+    _, sa, assignment = ctx
     if sa.submitted_at:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Assignment is locked")
+    slot, _ap = _resolve_slot(assignment, index)
     drafts = dict(sa.draft_answers or {})
-    drafts[str(index)] = body.answers
+    drafts[str(slot)] = body.answers
     sa.draft_answers = drafts
     db.add(sa)
-    return {"savedAt": datetime.now(timezone.utc).isoformat()}
+    return {"savedAt": datetime.now(UTC).isoformat()}
 
 
 @router.post("/{slug}/problems/{index}/check")
@@ -313,19 +365,16 @@ async def check_answers(
     if sa.submitted_at:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Assignment is locked")
 
-    problems_sorted = sorted(assignment.problems, key=lambda p: p.order_index)
-    if index < 0 or index >= len(problems_sorted):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Problem index out of range")
-    ap = problems_sorted[index]
+    slot, ap = _resolve_slot(assignment, index)
 
     generator = problem_registry.get(ap.problem_type)
-    seed = _effective_seed(sa, index)
+    seed = _effective_seed(sa, slot)
 
-    display = generator.generate(seed=seed, params={"problem_id": index + 1})
+    display = generator.generate(seed=seed, params={"problem_id": index})
     geometry = _build_truss_geometry(display.visual_schema)
     members = geometry["members"]
 
-    ground_truth = generator.solve(seed=seed, params={"problem_id": index + 1})
+    ground_truth = generator.solve(seed=seed, params={"problem_id": index})
     member_solutions = ground_truth["member_solutions"]
 
     per_field = _check_answers(body.answers, member_solutions, members, assignment.tolerance)
@@ -348,7 +397,7 @@ async def check_answers(
         raw_score=1.0 if all_correct else 0.0,
         net_score=1.0 if all_correct else 0.0,
         is_passed=all_correct,
-        field_verdicts={k: v for k, v in per_field.items()},
+        field_verdicts=dict(per_field),
     )
     db.add(submission)
 
@@ -357,7 +406,10 @@ async def check_answers(
         message = "All members correct. Great work!"
     elif attempt_number > 1:
         wrong = sum(1 for v in per_field.values() if not v)
-        message = f"{wrong} of {len(members)} members incorrect. Check your signs and equilibrium equations."
+        message = (
+            f"{wrong} of {len(members)} members incorrect. "
+            "Check your signs and equilibrium equations."
+        )
         prob_status = "incorrect"
     else:
         wrong = sum(1 for v in per_field.values() if not v)
@@ -388,7 +440,7 @@ async def submit_assignment(
     if sa.submitted_at:
         return _build_submission_result(sa, assignment, all_subs)
 
-    sa.submitted_at = datetime.now(timezone.utc)
+    sa.submitted_at = datetime.now(UTC)
     problems_sorted = sorted(assignment.problems, key=lambda p: p.order_index)
     subs_by_problem: dict[uuid.UUID, list[Submission]] = {}
     for s in all_subs:
@@ -431,7 +483,8 @@ def _build_submission_result(
     for s in all_subs:
         subs_by_problem.setdefault(s.assignment_problem_id, []).append(s)
 
-    problem_results = []
+    problem_results: list[dict[str, Any]] = []
+    earned = 0
     for ap in problems_sorted:
         subs = subs_by_problem.get(ap.id, [])
         if not subs:
@@ -440,9 +493,11 @@ def _build_submission_result(
             prob_status, points = "correct", 1
         else:
             prob_status, points = "incorrect", 0
-        problem_results.append({"index": ap.order_index, "status": prob_status, "points": points})
+        earned += points
+        problem_results.append(
+            {"index": ap.order_index + 1, "status": prob_status, "points": points}
+        )
 
-    earned = sum(p["points"] for p in problem_results)
     return {
         "submittedAt": sa.submitted_at.isoformat() if sa.submitted_at else None,
         "score": {"earned": earned, "total": len(problems_sorted)},

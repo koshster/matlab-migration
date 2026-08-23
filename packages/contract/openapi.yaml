@@ -29,30 +29,68 @@ paths:
   # Student auth
   # ---------------------------------------------------------------------------
 
-  /api/v1/auth/student/session:
+  /api/v1/auth/student/register:
     post:
-      operationId: createStudentSession
-      summary: Start or restore a student session
+      operationId: registerStudent
+      summary: Create a student account and start a session
       tags: [student-auth]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/StudentSessionRequest"
+              $ref: "#/components/schemas/StudentRegisterRequest"
+      responses:
+        "201":
+          description: Account created; session cookie set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentAuthResponse"
+        "409":
+          description: An account with that PID already exists
+
+  /api/v1/auth/student/login:
+    post:
+      operationId: loginStudent
+      summary: Authenticate a student by PID and password
+      tags: [student-auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentLoginRequest"
       responses:
         "200":
-          description: Session created or restored
+          description: Authenticated; session cookie set
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StudentSessionResponse"
-        "409":
-          description: Assignment already submitted
+                $ref: "#/components/schemas/StudentAuthResponse"
+        "401":
+          description: Invalid credentials
+
+  # ---------------------------------------------------------------------------
+  # Student dashboard
+  # ---------------------------------------------------------------------------
+
+  /api/v1/student/assignments:
+    get:
+      operationId: listStudentAssignments
+      summary: Assignments visible to the signed-in student
+      tags: [student]
+      responses:
+        "200":
+          description: Assignment list
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlreadySubmittedError"
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentAssignmentListItem"
+        "401":
+          description: Not authenticated
 
   # ---------------------------------------------------------------------------
   # Assignments
@@ -231,11 +269,11 @@ components:
     # Student auth
     # -------------------------------------------------------------------------
 
-    StudentSessionRequest:
+    StudentRegisterRequest:
       type: object
-      required: [externalId, firstName, lastName, assignmentSlug]
+      required: [pid, firstName, lastName, password]
       properties:
-        externalId:
+        pid:
           type: string
           description: Student PID (never appears in URLs or logs)
           example: A12345678
@@ -245,42 +283,67 @@ components:
         lastName:
           type: string
           example: Kumar
-        assignmentSlug:
+        password:
           type: string
-          example: truss-fall-2026
+          format: password
+          minLength: 8
 
-    StudentSessionResponse:
+    StudentLoginRequest:
       type: object
-      required: [student, assignment]
+      required: [pid, password]
+      properties:
+        pid:
+          type: string
+          example: A12345678
+        password:
+          type: string
+          format: password
+
+    StudentAuthResponse:
+      type: object
+      required: [student]
       properties:
         student:
-          type: object
-          required: [id, firstName, lastName]
-          properties:
-            id:
-              type: string
-              format: uuid
-            firstName:
-              type: string
-            lastName:
-              type: string
-        assignment:
-          $ref: "#/components/schemas/AssignmentSummary"
+          $ref: "#/components/schemas/StudentRecord"
 
-    AlreadySubmittedError:
+    StudentRecord:
       type: object
-      required: [code, submittedAt, score, total]
+      required: [id, firstName, lastName]
       properties:
-        code:
+        id:
           type: string
-          enum: [ALREADY_SUBMITTED]
-        submittedAt:
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    StudentAssignmentListItem:
+      type: object
+      required: [slug, title, status, score, dueAt, problemCount]
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [not_started, in_progress, submitted]
+        score:
+          type: object
+          nullable: true
+          required: [earned, total]
+          properties:
+            earned:
+              type: number
+            total:
+              type: number
+        dueAt:
           type: string
           format: date-time
-        score:
-          type: number
-        total:
-          type: number
+          nullable: true
+        problemCount:
+          type: integer
 
     # -------------------------------------------------------------------------
     # Assignment

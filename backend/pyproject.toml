@@ -48,6 +48,23 @@ target-version = "py312"
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = []
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom puts these calls in argument defaults on
+# purpose; B008 is a false positive for every route signature in the app.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Cookie",
+    "fastapi.Header",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Request/response models mirror the camelCase wire contract in openapi.yaml,
+# so mixed-case field names are intentional there.
+"app/api/v1/*.py" = ["N815"]
+
 [tool.mypy]
 strict = true
 python_version = "3.12"

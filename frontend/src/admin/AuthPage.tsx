@@ -50,7 +50,13 @@ export default function AdminAuthPage() {
       setPasswordMismatch(true)
       return
     }
-    const { confirmPassword: _, ...body } = registerFields
+    // Built explicitly so confirmPassword — or any field added to the form
+    // later — can never be sent to the API by accident.
+    const body = {
+      name: registerFields.name,
+      email: registerFields.email,
+      password: registerFields.password,
+    }
     registerMutation.mutate(body, {
       onSuccess: (data) => {
         setInstructor(data.instructor)

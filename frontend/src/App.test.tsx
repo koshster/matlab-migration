@@ -13,8 +13,13 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('App', () => {
-  it('renders the placeholder heading', () => {
+  // Routes are React.lazy, so the first paint is the Suspense fallback —
+  // these must await the resolved chunk rather than assert synchronously.
+  it('sends an unauthenticated visitor to the student login', async () => {
     render(<App />, { wrapper })
-    expect(screen.getByRole('heading', { name: /statics platform/i })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: /statics platform/i }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText(/student portal/i)).toBeInTheDocument()
   })
 })

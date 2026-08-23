@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from fastapi import Cookie, HTTPException, status
 from jose import JWTError, jwt
@@ -10,19 +11,24 @@ _COOKIE_NAME = "student_session"
 
 
 def create_student_token(student_id: uuid.UUID) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.jwt_expire_minutes)
     payload = {
         "sub": str(student_id),
         "exp": expire,
     }
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    # python-jose ships no type stubs, so both calls return Any.
+    token = jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    return cast(str, token)
 
 
 def decode_student_token(token: str) -> dict[str, str]:
     try:
-        return jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
+        return cast(dict[str, str], payload)
     except JWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session"
+        ) from exc
 
 
 def get_current_student_id(
