@@ -20,6 +20,10 @@ const problemByIndex = (index: number) => {
 // Track check attempts per problem in memory (resets on page reload)
 const checkCounts: Record<number, number> = {}
 
+// Stands in for the httpOnly instructor cookie so /me and logout behave
+// realistically in dev (resets on page reload).
+let mockInstructor: { id: string; email: string; name: string } | null = null
+
 export const handlers = [
   // Assignment summary
   http.get(`${BASE}/assignments/:slug`, () => {
@@ -55,16 +59,19 @@ export const handlers = [
     return HttpResponse.json(submissionResult)
   }),
 
-  // Instructor login — any password works in dev
+  // Instructor login — any password works; 401 if email contains 'invalid'
   http.post(`${BASE}/auth/instructor/login`, async ({ request }) => {
     const body = await request.json() as { email?: string }
-    return HttpResponse.json({
-      instructor: {
-        id: 'mock-instructor-uuid',
-        email: body.email ?? 'marko@university.edu',
-        name: 'Prof. Marko',
-      },
-    })
+    if (body.email?.includes('invalid')) {
+      return HttpResponse.json({ detail: 'Invalid credentials' }, { status: 401 })
+    }
+    // Real API stores and returns the email lowercased.
+    mockInstructor = {
+      id: 'mock-instructor-uuid',
+      email: (body.email ?? 'marko@university.edu').trim().toLowerCase(),
+      name: 'Prof. Marko',
+    }
+    return HttpResponse.json({ instructor: mockInstructor })
   }),
 
   // Instructor register — 409 if email contains "taken"
@@ -73,20 +80,31 @@ export const handlers = [
     if (body.email?.includes('taken')) {
       return HttpResponse.json({ detail: 'Email already registered' }, { status: 409 })
     }
-    return HttpResponse.json(
-      {
-        instructor: {
-          id: 'mock-instructor-uuid',
-          email: body.email ?? 'new@university.edu',
-          name: body.name ?? 'New Instructor',
-        },
-      },
-      { status: 201 },
-    )
+    mockInstructor = {
+      id: 'mock-instructor-uuid',
+      email: (body.email ?? 'new@university.edu').trim().toLowerCase(),
+      name: body.name ?? 'New Instructor',
+    }
+    return HttpResponse.json({ instructor: mockInstructor }, { status: 201 })
   }),
 
   // Instructor logout
   http.post(`${BASE}/auth/instructor/logout`, () => {
+    mockInstructor = null
+    return HttpResponse.json({ ok: true })
+  }),
+
+  // Current instructor, resolved from the session — 401 once logged out, so the
+  // admin UI's rehydrate path behaves the same against mocks as against the API
+  http.get(`${BASE}/auth/instructor/me`, () => {
+    if (!mockInstructor) {
+      return HttpResponse.json({ detail: 'Not authenticated' }, { status: 401 })
+    }
+    return HttpResponse.json({ instructor: mockInstructor })
+  }),
+
+  // Student logout
+  http.post(`${BASE}/auth/student/logout`, () => {
     return HttpResponse.json({ ok: true })
   }),
 

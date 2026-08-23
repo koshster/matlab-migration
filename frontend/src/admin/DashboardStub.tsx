@@ -1,13 +1,31 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useInstructor } from '../context/InstructorContext'
 import { useSetInstructor } from '../context/InstructorContext'
-import { useInstructorLogout } from '../api/hooks'
+import { useInstructorLogout, useInstructorMe } from '../api/hooks'
 
 export default function DashboardStub() {
   const instructor = useInstructor()
   const setInstructor = useSetInstructor()
   const navigate = useNavigate()
   const logoutMutation = useInstructorLogout()
+
+  // The context copy lives in sessionStorage and can outlive the httpOnly
+  // cookie, so confirm the session against the server and drop it if the
+  // cookie is gone. Without this the dashboard renders for a dead session.
+  const { data, isError } = useInstructorMe()
+
+  useEffect(() => {
+    if (isError) {
+      setInstructor(null)
+      navigate('/admin/login', { replace: true })
+      return
+    }
+    const fresh = data?.instructor
+    if (fresh && (fresh.id !== instructor.id || fresh.name !== instructor.name)) {
+      setInstructor(fresh)
+    }
+  }, [data, isError, instructor.id, instructor.name, navigate, setInstructor])
 
   function handleLogout() {
     logoutMutation.mutate(undefined, {

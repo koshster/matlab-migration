@@ -13,6 +13,11 @@ type StudentLoginRequest = components['schemas']['StudentLoginRequest']
 type StudentRegisterRequest = components['schemas']['StudentRegisterRequest']
 type StudentAuthResponse = components['schemas']['StudentAuthResponse']
 type StudentAssignmentItem = components['schemas']['StudentAssignmentListItem']
+type InstructorLoginRequest = components['schemas']['InstructorLoginRequest']
+type InstructorRegisterRequest = components['schemas']['InstructorRegisterRequest']
+type InstructorAuthResponse = components['schemas']['InstructorAuthResponse']
+type InstructorRecord = components['schemas']['InstructorRecord']
+type OkResponse = components['schemas']['OkResponse']
 
 export type {
   AssignmentSummary,
@@ -20,6 +25,7 @@ export type {
   CheckResult,
   SubmissionResult,
   StudentAssignmentItem,
+  InstructorRecord,
 }
 
 // ---------------------------------------------------------------------------
@@ -29,6 +35,7 @@ const keys = {
   assignment: (slug: string) => ['assignment', slug] as const,
   problem: (slug: string, index: number) => ['problem', slug, index] as const,
   result: (slug: string) => ['result', slug] as const,
+  instructorMe: () => ['instructor', 'me'] as const,
 }
 
 // ---------------------------------------------------------------------------
@@ -148,18 +155,8 @@ export function useResult(slug: string) {
 // Instructor auth
 // ---------------------------------------------------------------------------
 
-interface InstructorRecord {
-  id: string
-  email: string
-  name: string
-}
-
-interface InstructorResponse {
-  instructor: InstructorRecord
-}
-
 export function useInstructorLogin() {
-  return useMutation<InstructorResponse, ApiError, { email: string; password: string }>({
+  return useMutation<InstructorAuthResponse, ApiError, InstructorLoginRequest>({
     mutationFn: (body) =>
       apiFetch('/api/v1/auth/instructor/login', {
         method: 'POST',
@@ -169,7 +166,7 @@ export function useInstructorLogin() {
 }
 
 export function useInstructorRegister() {
-  return useMutation<InstructorResponse, ApiError, { name: string; email: string; password: string }>({
+  return useMutation<InstructorAuthResponse, ApiError, InstructorRegisterRequest>({
     mutationFn: (body) =>
       apiFetch('/api/v1/auth/instructor/register', {
         method: 'POST',
@@ -179,8 +176,32 @@ export function useInstructorRegister() {
 }
 
 export function useInstructorLogout() {
-  return useMutation<{ ok: boolean }, ApiError>({
-    mutationFn: () =>
-      apiFetch('/api/v1/auth/instructor/logout', { method: 'POST' }),
+  const qc = useQueryClient()
+  return useMutation<OkResponse, ApiError>({
+    mutationFn: () => apiFetch('/api/v1/auth/instructor/logout', { method: 'POST' }),
+    onSuccess: () => {
+      // Drop any admin data cached under the old session.
+      qc.removeQueries({ queryKey: keys.instructorMe() })
+    },
+  })
+}
+
+/**
+ * Resolves the instructor from the httpOnly cookie. InstructorContext keeps a
+ * sessionStorage copy purely as a UI gate, and that copy can outlive the
+ * cookie — this is the authoritative check.
+ */
+export function useInstructorMe(enabled = true) {
+  return useQuery<InstructorAuthResponse>({
+    queryKey: keys.instructorMe(),
+    queryFn: () => apiFetch('/api/v1/auth/instructor/me'),
+    enabled,
+    retry: false,
+  })
+}
+
+export function useStudentLogout() {
+  return useMutation<OkResponse, ApiError>({
+    mutationFn: () => apiFetch('/api/v1/auth/student/logout', { method: 'POST' }),
   })
 }
