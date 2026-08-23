@@ -1,16 +1,26 @@
 import '@testing-library/jest-dom'
-import { afterAll, afterEach, beforeAll } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest'
 import { server } from '../mocks/server'
+import { resetAdminMockState } from '../mocks/adminHandlers'
+import { resetStudentMockState } from '../mocks/studentHandlers'
 
-// The admin handlers hold mutable in-memory state, so tests that mutate the
-// roster must not leak into each other. Vitest isolates modules per test file
-// by default, which keeps that state per-file.
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })
+
+// The handlers hold mutable in-memory state so the UI behaves like a real
+// backend within a session. Vitest isolates modules per file but not per test,
+// so reset between tests — otherwise a test that accepts an invitation or drops
+// a student silently changes what later tests see.
+beforeEach(() => {
+  resetAdminMockState()
+  resetStudentMockState()
+})
+
 afterEach(() => {
   server.resetHandlers()
 })
+
 afterAll(() => {
   server.close()
 })

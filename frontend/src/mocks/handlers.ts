@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { adminHandlers } from './adminHandlers'
+import { studentHandlers } from './studentHandlers'
 import assignmentSummary from '@statics/contract/fixtures/assignment-summary.json'
 import truss3node from '@statics/contract/fixtures/truss-3node.json'
 import truss4node from '@statics/contract/fixtures/truss-4node.json'
@@ -138,35 +139,6 @@ export const handlers = [
     )
   }),
 
-  // Student assignment list (dashboard) — three assignments across all status states
-  http.get(`${BASE}/student/assignments`, () => {
-    return HttpResponse.json([
-      {
-        slug: 'truss-fall-2026',
-        title: 'Truss Analysis — Fall 2026',
-        status: 'in_progress',
-        score: null,
-        dueAt: '2026-12-15T23:59:00Z',
-        problemCount: 8,
-      },
-      {
-        slug: 'truss-quiz-week8',
-        title: 'Truss Review Quiz — Week 8',
-        status: 'not_started',
-        score: null,
-        dueAt: '2026-10-30T23:59:00Z',
-        problemCount: 8,
-      },
-      {
-        slug: 'truss-practice-final',
-        title: 'Final Exam Practice',
-        status: 'submitted',
-        score: { earned: 6, total: 8 },
-        dueAt: null,
-        problemCount: 8,
-      },
-    ])
-  }),
-
+  ...studentHandlers,
   ...adminHandlers,
 ]
