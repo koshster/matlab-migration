@@ -1,0 +1,79 @@
+[
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000001",
+    "status": "active",
+    "pid": "A12345678",
+    "email": "ada@ucsd.edu",
+    "firstName": "Ada",
+    "lastName": "Lovelace",
+    "hasAccount": true,
+    "invitedAt": "2026-08-01T17:00:00Z",
+    "acceptedAt": "2026-08-02T09:14:00Z"
+  },
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000002",
+    "status": "active",
+    "pid": "A22222222",
+    "email": "grace@ucsd.edu",
+    "firstName": "Grace",
+    "lastName": "Hopper",
+    "hasAccount": true,
+    "invitedAt": "2026-08-01T17:00:00Z",
+    "acceptedAt": "2026-08-01T21:40:00Z"
+  },
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000003",
+    "status": "active",
+    "pid": "DEMO001",
+    "email": null,
+    "firstName": "Demo",
+    "lastName": "Student",
+    "hasAccount": true,
+    "invitedAt": "2026-08-05T12:00:00Z",
+    "acceptedAt": "2026-08-05T12:31:00Z"
+  },
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000004",
+    "status": "invited",
+    "pid": "A33333333",
+    "email": null,
+    "firstName": "Katherine",
+    "lastName": "Johnson",
+    "hasAccount": false,
+    "invitedAt": "2026-08-20T15:05:00Z",
+    "acceptedAt": null
+  },
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000005",
+    "status": "invited",
+    "pid": null,
+    "email": "mary.jackson@ucsd.edu",
+    "firstName": null,
+    "lastName": null,
+    "hasAccount": false,
+    "invitedAt": "2026-08-21T08:30:00Z",
+    "acceptedAt": null
+  },
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000006",
+    "status": "declined",
+    "pid": "A44444444",
+    "email": null,
+    "firstName": "Dorothy",
+    "lastName": "Vaughan",
+    "hasAccount": true,
+    "invitedAt": "2026-08-10T10:00:00Z",
+    "acceptedAt": null
+  },
+  {
+    "id": "aaaaaaa1-0000-4000-8000-000000000007",
+    "status": "dropped",
+    "pid": "A55555555",
+    "email": "melba@ucsd.edu",
+    "firstName": "Melba",
+    "lastName": "Roy",
+    "hasAccount": true,
+    "invitedAt": "2026-07-28T11:00:00Z",
+    "acceptedAt": "2026-07-29T13:12:00Z"
+  }
+]

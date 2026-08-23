@@ -1,0 +1,16 @@
+[
+  {
+    "id": "bbbbbbb1-0000-4000-8000-000000000001",
+    "instructorId": "cccccccc-0000-4000-8000-000000000001",
+    "name": "Prof. Marko",
+    "email": "marko@university.edu",
+    "role": "owner"
+  },
+  {
+    "id": "bbbbbbb1-0000-4000-8000-000000000002",
+    "instructorId": "cccccccc-0000-4000-8000-000000000002",
+    "name": "Rushil",
+    "email": "rushil@ucsd.edu",
+    "role": "ta"
+  }
+]

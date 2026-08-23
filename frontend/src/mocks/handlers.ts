@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw'
+import { adminHandlers } from './adminHandlers'
 import assignmentSummary from '@statics/contract/fixtures/assignment-summary.json'
 import truss3node from '@statics/contract/fixtures/truss-3node.json'
 import truss4node from '@statics/contract/fixtures/truss-4node.json'
@@ -166,4 +167,6 @@ export const handlers = [
       },
     ])
   }),
+
+  ...adminHandlers,
 ]

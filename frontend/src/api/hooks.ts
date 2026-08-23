@@ -205,3 +205,141 @@ export function useStudentLogout() {
     mutationFn: () => apiFetch('/api/v1/auth/student/logout', { method: 'POST' }),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Admin — courses, roster, staff
+// ---------------------------------------------------------------------------
+
+type CourseSummary = components['schemas']['CourseSummary']
+type CourseCreateRequest = components['schemas']['CourseCreateRequest']
+type CourseUpdateRequest = components['schemas']['CourseUpdateRequest']
+type RosterEntry = components['schemas']['RosterEntry']
+type RosterImportRequest = components['schemas']['RosterImportRequest']
+type RosterImportResult = components['schemas']['RosterImportResult']
+type RosterEntryUpdateRequest = components['schemas']['RosterEntryUpdateRequest']
+type CourseStaffMember = components['schemas']['CourseStaffMember']
+type CourseStaffAddRequest = components['schemas']['CourseStaffAddRequest']
+type CourseRole = components['schemas']['CourseRole']
+
+export type {
+  CourseSummary,
+  CourseRole,
+  RosterEntry,
+  RosterImportResult,
+  CourseStaffMember,
+}
+
+const adminKeys = {
+  courses: () => ['admin', 'courses'] as const,
+  course: (id: string) => ['admin', 'course', id] as const,
+  roster: (id: string) => ['admin', 'course', id, 'roster'] as const,
+  staff: (id: string) => ['admin', 'course', id, 'staff'] as const,
+}
+
+export function useCourses() {
+  return useQuery<CourseSummary[], ApiError>({
+    queryKey: adminKeys.courses(),
+    queryFn: () => apiFetch('/api/v1/admin/courses'),
+  })
+}
+
+export function useCourse(courseId: string) {
+  return useQuery<CourseSummary, ApiError>({
+    queryKey: adminKeys.course(courseId),
+    queryFn: () => apiFetch(`/api/v1/admin/courses/${courseId}`),
+    enabled: !!courseId,
+  })
+}
+
+export function useCreateCourse() {
+  const qc = useQueryClient()
+  return useMutation<CourseSummary, ApiError, CourseCreateRequest>({
+    mutationFn: (body) =>
+      apiFetch('/api/v1/admin/courses', { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminKeys.courses() })
+    },
+  })
+}
+
+export function useUpdateCourse(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<CourseSummary, ApiError, CourseUpdateRequest>({
+    mutationFn: (body) =>
+      apiFetch(`/api/v1/admin/courses/${courseId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (course) => {
+      qc.setQueryData(adminKeys.course(courseId), course)
+      void qc.invalidateQueries({ queryKey: adminKeys.courses() })
+    },
+  })
+}
+
+export function useRoster(courseId: string) {
+  return useQuery<RosterEntry[], ApiError>({
+    queryKey: adminKeys.roster(courseId),
+    queryFn: () => apiFetch(`/api/v1/admin/courses/${courseId}/roster`),
+    enabled: !!courseId,
+  })
+}
+
+export function useAddRosterEntries(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<RosterImportResult, ApiError, RosterImportRequest>({
+    mutationFn: (body) =>
+      apiFetch(`/api/v1/admin/courses/${courseId}/roster`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminKeys.roster(courseId) })
+      // Roster changes move the course-list counts.
+      void qc.invalidateQueries({ queryKey: adminKeys.courses() })
+      void qc.invalidateQueries({ queryKey: adminKeys.course(courseId) })
+    },
+  })
+}
+
+export function useUpdateRosterEntry(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<
+    RosterEntry,
+    ApiError,
+    { entryId: string; body: RosterEntryUpdateRequest }
+  >({
+    mutationFn: ({ entryId, body }) =>
+      apiFetch(`/api/v1/admin/courses/${courseId}/roster/${entryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminKeys.roster(courseId) })
+      void qc.invalidateQueries({ queryKey: adminKeys.courses() })
+      void qc.invalidateQueries({ queryKey: adminKeys.course(courseId) })
+    },
+  })
+}
+
+export function useCourseStaff(courseId: string) {
+  return useQuery<CourseStaffMember[], ApiError>({
+    queryKey: adminKeys.staff(courseId),
+    queryFn: () => apiFetch(`/api/v1/admin/courses/${courseId}/staff`),
+    enabled: !!courseId,
+  })
+}
+
+export function useAddCourseStaff(courseId: string) {
+  const qc = useQueryClient()
+  return useMutation<CourseStaffMember, ApiError, CourseStaffAddRequest>({
+    mutationFn: (body) =>
+      apiFetch(`/api/v1/admin/courses/${courseId}/staff`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminKeys.staff(courseId) })
+    },
+  })
+}

@@ -8,7 +8,8 @@ const SubmittedScreen = lazy(() => import('./routes/SubmittedRoute'))
 const StudentAuthPage = lazy(() => import('./student/AuthPage'))
 const StudentDashboard = lazy(() => import('./student/Dashboard'))
 const AdminAuthPage = lazy(() => import('./admin/AuthPage'))
-const DashboardStub = lazy(() => import('./admin/DashboardStub'))
+const CoursesPage = lazy(() => import('./admin/CoursesPage'))
+const CourseDetailPage = lazy(() => import('./admin/CourseDetailPage'))
 
 function RequireSession({ children }: { children: React.ReactNode }) {
   const session = useOptionalSession()
@@ -80,12 +81,31 @@ function AppRoutes() {
         element={
           <RequireInstructor>
             <Suspense fallback={<FullPageSpinner />}>
-              <DashboardStub />
+              <CoursesPage />
             </Suspense>
           </RequireInstructor>
         }
       />
-      <Route path="/admin/*" element={<Navigate to="/admin/login" replace />} />
+      <Route
+        path="/admin/courses/:courseId"
+        element={
+          <RequireInstructor>
+            <Suspense fallback={<FullPageSpinner />}>
+              <CourseDetailPage />
+            </Suspense>
+          </RequireInstructor>
+        }
+      />
+      {/* Unknown /admin/* paths go to the course list when signed in, rather
+          than bouncing an authenticated instructor to the login screen. */}
+      <Route
+        path="/admin/*"
+        element={
+          <RequireInstructor>
+            <Navigate to="/admin" replace />
+          </RequireInstructor>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
