@@ -315,8 +315,32 @@ async def get_problem(
     params = _generator_params(ap, index)
     display = generator.generate(seed=seed, params=params)
 
-    geometry = _build_truss_geometry(display.visual_schema)
-    answer_schema = _build_answer_schema(geometry["members"])
+    if ap.problem_type == "truss":
+        geometry = _build_truss_geometry(display.visual_schema)
+        answer_schema = _build_answer_schema(geometry["members"])
+    else:
+        geometry = {
+            "schemaVersion": 1,
+            "elements": [el.model_dump() for el in display.visual_schema],
+        }
+        answer_schema = {
+            "groups": [
+                {
+                    "id": "answers",
+                    "label": "Answers",
+                    "fields": [
+                        {
+                            "key": f.field_id,
+                            "label": f.label,
+                            "unit": f.unit,
+                            "type": f.value_type,
+                            "decimals": 2,
+                        }
+                        for f in display.answer_schema
+                    ],
+                }
+            ]
+        }
 
     # Fetch attempt count for this problem
     result = await db.execute(
@@ -384,17 +408,34 @@ async def check_answers(
     seed = _effective_seed(sa, slot)
     params = _generator_params(ap, index)
 
-    display = generator.generate(seed=seed, params=params)
-    geometry = _build_truss_geometry(display.visual_schema)
-    members = geometry["members"]
+    if ap.problem_type == "truss":
+        display = generator.generate(seed=seed, params=params)
+        geometry = _build_truss_geometry(display.visual_schema)
+        members = geometry["members"]
 
-    # Same seed and same params as generate(), or the student would be graded
-    # against a different truss than the one they were shown.
-    ground_truth = generator.solve(seed=seed, params=params)
-    member_solutions = ground_truth["member_solutions"]
+        # Same seed and same params as generate(), or the student would be graded
+        # against a different truss than the one they were shown.
+        ground_truth = generator.solve(seed=seed, params=params)
+        member_solutions = ground_truth["member_solutions"]
 
-    per_field = _check_answers(body.answers, member_solutions, members, assignment.tolerance)
-    all_correct = all(per_field.values()) and len(per_field) == len(members)
+        per_field = _check_answers(body.answers, member_solutions, members, assignment.tolerance)
+        all_correct = all(per_field.values()) and len(per_field) == len(members)
+        total_items = len(members)
+        item_label = "members"
+    else:
+        from app.problems.base import AnswerSubmission
+
+        # Generic evaluation for polymorphic problem domains (e.g. rigid_body)
+        grading_res = generator.check(
+            seed=seed,
+            submission=AnswerSubmission(answers=body.answers),
+            tolerance=assignment.tolerance,
+            params=params,
+        )
+        per_field = {k: res.is_correct for k, res in grading_res.field_results.items()}
+        all_correct = grading_res.is_passed
+        total_items = len(per_field)
+        item_label = "fields"
 
     result = await db.execute(
         select(Submission).where(
@@ -419,17 +460,17 @@ async def check_answers(
 
     if all_correct:
         prob_status = "correct"
-        message = "All members correct. Great work!"
+        message = f"All {item_label} correct. Great work!"
     elif attempt_number > 1:
         wrong = sum(1 for v in per_field.values() if not v)
         message = (
-            f"{wrong} of {len(members)} members incorrect. "
+            f"{wrong} of {total_items} {item_label} incorrect. "
             "Check your signs and equilibrium equations."
         )
         prob_status = "incorrect"
     else:
         wrong = sum(1 for v in per_field.values() if not v)
-        message = f"{wrong} of {len(members)} members incorrect."
+        message = f"{wrong} of {total_items} {item_label} incorrect."
         prob_status = "incorrect"
 
     return {
