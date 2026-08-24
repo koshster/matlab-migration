@@ -85,7 +85,11 @@ class TrussGenerator:
         node_count_schedule = [3, 3, 4, 4, 5, 5, 6, 6]
         problem_id = p.get("problem_id", 1)
         default_n = node_count_schedule[min(max(problem_id - 1, 0), len(node_count_schedule) - 1)]
-        n_nodes = p.get("num_nodes", default_n)
+        if "num_members" in p:
+            # Planar determinate truss member relation: m = 2n - 3 => n = (m + 3) / 2
+            n_nodes = max(3, min(8, (int(p["num_members"]) + 3) // 2))
+        else:
+            n_nodes = int(p.get("num_nodes", default_n))
 
         node_coords, members, _ = generate_truss_geometry(n_nodes, rng)
         pins, rollers = generate_supports(node_coords, rng)

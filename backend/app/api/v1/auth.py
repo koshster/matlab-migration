@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # NOTE: PIDs are stored as typed for now. Normalizing them here would stop
 # existing accounts (e.g. seeded "demo001") from logging in; that switch belongs
 # with Phase B's `pid_normalized` column and its backfill.
-from app.core.identity import looks_like_email, normalize_email
+from app.core.identity import looks_like_email, normalize_email, normalize_pid
 from app.core.security import (
     clear_instructor_cookie,
     clear_student_cookie,
@@ -17,7 +17,7 @@ from app.core.security import (
     set_student_cookie,
     verify_password,
 )
-from app.db.models import Instructor, Student
+from app.db.models import Instructor, RosterEntry, Student
 from app.db.session import get_db
 from app.services.authz import require_instructor
 
@@ -75,13 +75,32 @@ def _instructor_out(instructor: Instructor) -> dict[str, Any]:
     }
 
 
+async def _link_roster_entries(db: AsyncSession, student: Student) -> None:
+    """Auto-link unlinked roster entries matching the student's normalized PID."""
+    norm_pid = normalize_pid(student.pid)
+    unlinked_rows = (
+        await db.execute(
+            select(RosterEntry).where(
+                func.upper(RosterEntry.pid) == norm_pid,
+                RosterEntry.student_id.is_(None),
+            )
+        )
+    ).scalars().all()
+    for entry in unlinked_rows:
+        entry.student_id = student.id
+        db.add(entry)
+
+
 @router.post("/student/register", status_code=status.HTTP_201_CREATED)
 async def register_student(
     body: StudentRegisterRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    existing_row = await db.execute(select(Student).where(Student.pid == body.pid))
+    norm_pid = normalize_pid(body.pid)
+    existing_row = await db.execute(
+        select(Student).where(func.upper(Student.pid) == norm_pid)
+    )
     if existing_row.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="PID already registered")
 
@@ -92,6 +111,9 @@ async def register_student(
         password_hash=hash_password(body.password),
     )
     db.add(student)
+    await db.flush()
+
+    await _link_roster_entries(db, student)
     await db.commit()
     await db.refresh(student)
 
@@ -105,7 +127,10 @@ async def login_student(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    student_row = await db.execute(select(Student).where(Student.pid == body.pid))
+    norm_pid = normalize_pid(body.pid)
+    student_row = await db.execute(
+        select(Student).where(func.upper(Student.pid) == norm_pid)
+    )
     student = student_row.scalar_one_or_none()
 
     # Inlined rather than assigned to a flag so the None check narrows `student`
@@ -116,6 +141,9 @@ async def login_student(
         or not verify_password(body.password, student.password_hash)
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    await _link_roster_entries(db, student)
+    await db.commit()
 
     set_student_cookie(response, student.id)
     return {"student": _student_out(student)}

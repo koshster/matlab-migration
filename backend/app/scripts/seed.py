@@ -1,4 +1,4 @@
-"""Seed script: creates instructor, course, assignments, and a demo student."""
+"""Seed script: creates instructor, course, roster entries, assignments, and demo student."""
 
 import asyncio
 from datetime import UTC, datetime
@@ -10,7 +10,10 @@ from app.db.models import (
     Assignment,
     AssignmentProblem,
     Course,
+    CourseEnrollment,
+    CourseInstructor,
     Instructor,
+    RosterEntry,
     Student,
     StudentAssignment,
     Submission,
@@ -47,8 +50,23 @@ async def seed() -> None:
         )
         course = course_row.scalar_one_or_none()
         if course is None:
-            course = Course(instructor_id=instructor.id, code="ENGR301", term="Fall 2026")
+            course = Course(
+                instructor_id=instructor.id,
+                code="ENGR301",
+                term="Fall 2026",
+                section="001",
+                title="Statics & Structural Mechanics",
+                is_archived=False,
+            )
             db.add(course)
+            await db.flush()
+
+            staff_entry = CourseInstructor(
+                course_id=course.id,
+                instructor_id=instructor.id,
+                role="owner",
+            )
+            db.add(staff_entry)
             await db.flush()
             print("Created course ENGR301 Fall 2026")
         else:
@@ -71,30 +89,37 @@ async def seed() -> None:
                     course_id=course.id,
                     slug=slug,
                     title=title,
+                    instructions="Determine the internal force in each truss member.",
                     tolerance=0.01,
                     feedback_mode="per_field",
                     max_attempts=None,
                     is_active=True,
+                    is_published=True,
+                    audience="all",
                     due_at=due_at,
                 )
                 db.add(a)
                 await db.flush()
                 node_counts = [3, 3, 4, 4, 5, 5, 6, 6]
                 for i, n in enumerate(node_counts):
-                    db.add(AssignmentProblem(
-                        assignment_id=a.id,
-                        problem_type="truss",
-                        order_index=i,
-                        params={"num_nodes": n},
-                    ))
+                    db.add(
+                        AssignmentProblem(
+                            assignment_id=a.id,
+                            problem_type="truss",
+                            order_index=i,
+                            points=1.0,
+                            params={"num_nodes": n, "max_force": 5, "load_count": 1},
+                        )
+                    )
                 await db.flush()
                 print(f"Created assignment {slug}")
             else:
                 print(f"Assignment {slug} already exists")
+                a.is_published = True
                 if due_at is not None and a.due_at is None:
                     a.due_at = due_at
-                    db.add(a)
-                    await db.flush()
+                db.add(a)
+                await db.flush()
 
             problem_rows = await db.execute(
                 select(AssignmentProblem)
@@ -138,7 +163,45 @@ async def seed() -> None:
             print("Student demo001 already exists")
 
         # ------------------------------------------------------------------
-        # StudentAssignment 1: truss-fall-2026 → in_progress
+        # Course Enrollment & Roster Entry for demo student
+        # ------------------------------------------------------------------
+        roster_row = await db.execute(
+            select(RosterEntry).where(
+                RosterEntry.course_id == course.id,
+                RosterEntry.student_id == student.id,
+            )
+        )
+        if roster_row.scalar_one_or_none() is None:
+            roster_entry = RosterEntry(
+                course_id=course.id,
+                student_id=student.id,
+                pid="DEMO001",
+                email="demo@student.edu",
+                first_name="Demo",
+                last_name="Student",
+                status="active",
+                accepted_at=datetime.now(UTC),
+            )
+            db.add(roster_entry)
+            await db.flush()
+
+        enrollment_row = await db.execute(
+            select(CourseEnrollment).where(
+                CourseEnrollment.course_id == course.id,
+                CourseEnrollment.student_id == student.id,
+            )
+        )
+        if enrollment_row.scalar_one_or_none() is None:
+            enrollment = CourseEnrollment(
+                course_id=course.id,
+                student_id=student.id,
+                status="active",
+            )
+            db.add(enrollment)
+            await db.flush()
+
+        # ------------------------------------------------------------------
+        # StudentAssignment 1: truss-fall-2026 -> in_progress
         # ------------------------------------------------------------------
         sa1_row = await db.execute(
             select(StudentAssignment).where(
@@ -157,50 +220,50 @@ async def seed() -> None:
             db.add(sa1)
             await db.flush()
 
-            # 3 problem attempts: problems 0 (correct), 1 (incorrect), 2 (correct)
-            attempt_results = [(0, True), (1, False), (2, True)]
-            for prob_idx, is_passed in attempt_results:
-                ap = a1_probs[prob_idx]
-                db.add(Submission(
+            # Problem 0: passed
+            db.add(
+                Submission(
                     student_assignment_id=sa1.id,
-                    assignment_problem_id=ap.id,
+                    assignment_problem_id=a1_probs[0].id,
                     attempt_number=1,
-                    answers={"S1": 1.5, "S2": -2.0},
-                    raw_score=1.0 if is_passed else 0.0,
-                    net_score=1.0 if is_passed else 0.0,
-                    is_passed=is_passed,
-                    field_verdicts={"S1": is_passed, "S2": is_passed},
-                ))
+                    answers={"S1": 0.0, "S2": 0.0, "S3": 0.0},
+                    raw_score=1.0,
+                    net_score=1.0,
+                    is_passed=True,
+                    field_verdicts={"S1": True, "S2": True, "S3": True},
+                )
+            )
+            # Problem 1: failed attempt
+            db.add(
+                Submission(
+                    student_assignment_id=sa1.id,
+                    assignment_problem_id=a1_probs[1].id,
+                    attempt_number=1,
+                    answers={"S1": 999.0},
+                    raw_score=0.0,
+                    net_score=0.0,
+                    is_passed=False,
+                    field_verdicts={"S1": False},
+                )
+            )
+            # Problem 2: passed
+            db.add(
+                Submission(
+                    student_assignment_id=sa1.id,
+                    assignment_problem_id=a1_probs[2].id,
+                    attempt_number=1,
+                    answers={"S1": 0.0, "S2": 0.0, "S3": 0.0},
+                    raw_score=1.0,
+                    net_score=1.0,
+                    is_passed=True,
+                    field_verdicts={"S1": True, "S2": True, "S3": True},
+                )
+            )
             await db.flush()
-            print("Created StudentAssignment truss-fall-2026 (in_progress, 3 attempts)")
-        else:
-            print("StudentAssignment truss-fall-2026 already exists")
+            print("Seeded submissions for truss-fall-2026 (in_progress)")
 
         # ------------------------------------------------------------------
-        # StudentAssignment 2: truss-quiz-week8 → not_started
-        # ------------------------------------------------------------------
-        sa2_row = await db.execute(
-            select(StudentAssignment).where(
-                StudentAssignment.student_id == student.id,
-                StudentAssignment.assignment_id == a2.id,
-            )
-        )
-        sa2 = sa2_row.scalar_one_or_none()
-        if sa2 is None:
-            sa2 = StudentAssignment(
-                student_id=student.id,
-                assignment_id=a2.id,
-                seed=100,
-                draft_answers={},
-            )
-            db.add(sa2)
-            await db.flush()
-            print("Created StudentAssignment truss-quiz-week8 (not_started)")
-        else:
-            print("StudentAssignment truss-quiz-week8 already exists")
-
-        # ------------------------------------------------------------------
-        # StudentAssignment 3: truss-practice-final → submitted, 6/8 correct
+        # StudentAssignment 3: truss-practice-final -> submitted (6/8)
         # ------------------------------------------------------------------
         sa3_row = await db.execute(
             select(StudentAssignment).where(
@@ -210,41 +273,36 @@ async def seed() -> None:
         )
         sa3 = sa3_row.scalar_one_or_none()
         if sa3 is None:
-            submitted_at = datetime(2026, 8, 10, 14, 30, tzinfo=UTC)
             sa3 = StudentAssignment(
                 student_id=student.id,
                 assignment_id=a3.id,
-                seed=200,
+                seed=99,
                 draft_answers={},
-                submitted_at=submitted_at,
+                submitted_at=datetime(2026, 8, 1, 12, 0, tzinfo=UTC),
                 final_score=6.0,
             )
             db.add(sa3)
             await db.flush()
 
-            # 8 submissions: problems 0-5 correct, 6-7 incorrect
-            for i, ap in enumerate(a3_probs):
-                is_passed = i < 6
-                db.add(Submission(
-                    student_assignment_id=sa3.id,
-                    assignment_problem_id=ap.id,
-                    attempt_number=1,
-                    answers={"S1": 1.5, "S2": -2.0},
-                    raw_score=1.0 if is_passed else 0.0,
-                    net_score=1.0 if is_passed else 0.0,
-                    is_passed=is_passed,
-                    field_verdicts={"S1": is_passed, "S2": is_passed},
-                    submitted_at=submitted_at,
-                ))
+            for i, prob in enumerate(a3_probs):
+                passed = i < 6
+                db.add(
+                    Submission(
+                        student_assignment_id=sa3.id,
+                        assignment_problem_id=prob.id,
+                        attempt_number=1,
+                        answers={},
+                        raw_score=1.0 if passed else 0.0,
+                        net_score=1.0 if passed else 0.0,
+                        is_passed=passed,
+                        field_verdicts={},
+                    )
+                )
             await db.flush()
-            print("Created StudentAssignment truss-practice-final (submitted, 6/8)")
-        else:
-            print("StudentAssignment truss-practice-final already exists")
+            print("Seeded submissions for truss-practice-final (submitted 6/8)")
 
         await db.commit()
-        print("\nSeed complete.")
-        print("  Instructor: marko@university.edu / statics2026")
-        print("  Student:    demo001 / demo1234")
+        print("Seed complete.")
 
 
 if __name__ == "__main__":

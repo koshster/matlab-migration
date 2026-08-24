@@ -1,3 +1,10 @@
+"""SQLAlchemy ORM models for the Statics Problem Platform.
+
+Defines persistence schema for students, instructors, courses, course rosters,
+course staff, assignments, assignment problem slots, student assignment sessions,
+and problem submissions.
+"""
+
 import uuid
 from datetime import datetime
 from typing import Any
@@ -39,6 +46,9 @@ class Student(Base):
     student_assignments: Mapped[list["StudentAssignment"]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
+    roster_entries: Mapped[list["RosterEntry"]] = relationship(
+        back_populates="student"
+    )
 
 
 class Instructor(Base):
@@ -57,6 +67,9 @@ class Instructor(Base):
     courses: Mapped[list["Course"]] = relationship(
         back_populates="instructor", cascade="all, delete-orphan"
     )
+    staff_roles: Mapped[list["CourseInstructor"]] = relationship(
+        back_populates="instructor", cascade="all, delete-orphan"
+    )
 
 
 class Course(Base):
@@ -72,17 +85,50 @@ class Course(Base):
     )
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     term: Mapped[str] = mapped_column(String(64), nullable=False)
+    section: Mapped[str] = mapped_column(String(32), default="001", nullable=False)
+    title: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     instructor: Mapped["Instructor"] = relationship(back_populates="courses")
+    staff: Mapped[list["CourseInstructor"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
     enrollments: Mapped[list["CourseEnrollment"]] = relationship(
+        back_populates="course", cascade="all, delete-orphan"
+    )
+    roster_entries: Mapped[list["RosterEntry"]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
     assignments: Mapped[list["Assignment"]] = relationship(
         back_populates="course", cascade="all, delete-orphan"
     )
+
+
+class CourseInstructor(Base):
+    """Course staff membership junction with role."""
+
+    __tablename__ = "course_instructors"
+    __table_args__ = (
+        UniqueConstraint("course_id", "instructor_id", name="uq_course_instructor"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    instructor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instructors.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(32), default="ta", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    course: Mapped["Course"] = relationship(back_populates="staff")
+    instructor: Mapped["Instructor"] = relationship(back_populates="staff_roles")
 
 
 class CourseEnrollment(Base):
@@ -110,6 +156,35 @@ class CourseEnrollment(Base):
     student: Mapped["Student"] = relationship(back_populates="enrollments")
 
 
+class RosterEntry(Base):
+    """Course roster entry tracking student invitations and account linking."""
+
+    __tablename__ = "roster_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    student_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("students.id", ondelete="SET NULL"), nullable=True
+    )
+    pid: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="invited", nullable=False)
+    invited_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    course: Mapped["Course"] = relationship(back_populates="roster_entries")
+    student: Mapped["Student | None"] = relationship(back_populates="roster_entries")
+    targets: Mapped[list["AssignmentTarget"]] = relationship(
+        back_populates="roster_entry", cascade="all, delete-orphan"
+    )
+
+
 class Assignment(Base):
     """Homework assignment containing N problems."""
 
@@ -121,6 +196,7 @@ class Assignment(Base):
     )
     slug: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    instructions: Mapped[str] = mapped_column(String(2048), default="", nullable=False)
     tolerance: Mapped[float] = mapped_column(Float, default=0.01, nullable=False)
     feedback_mode: Mapped[str] = mapped_column(String(32), default="per_field", nullable=False)
     max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
@@ -129,6 +205,9 @@ class Assignment(Base):
     allow_late: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     late_penalty_rate: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    audience: Mapped[str] = mapped_column(String(32), default="all", nullable=False)
+    opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     hard_deadline_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -146,6 +225,29 @@ class Assignment(Base):
     student_assignments: Mapped[list["StudentAssignment"]] = relationship(
         back_populates="assignment", cascade="all, delete-orphan"
     )
+    targets: Mapped[list["AssignmentTarget"]] = relationship(
+        back_populates="assignment", cascade="all, delete-orphan"
+    )
+
+
+class AssignmentTarget(Base):
+    """Junction table associating assignments to specific roster entries for selected audience."""
+
+    __tablename__ = "assignment_targets"
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "roster_entry_id", name="uq_assignment_roster_target"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    assignment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False
+    )
+    roster_entry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("roster_entries.id", ondelete="CASCADE"), nullable=False
+    )
+
+    assignment: Mapped["Assignment"] = relationship(back_populates="targets")
+    roster_entry: Mapped["RosterEntry"] = relationship(back_populates="targets")
 
 
 class AssignmentProblem(Base):
@@ -164,6 +266,7 @@ class AssignmentProblem(Base):
     )
     problem_type: Mapped[str] = mapped_column(String(64), default="truss", nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
     params: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     assignment: Mapped["Assignment"] = relationship(back_populates="problems")
