@@ -5,6 +5,7 @@ problem-type catalogue, assignment builder, assignment publishing, and problem p
 """
 
 import uuid
+from datetime import datetime
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -767,7 +768,9 @@ async def create_assignment(
         )
     ).scalar_one()
 
-    targeted_count = len(loaded_assignment.targets) if loaded_assignment.audience == "selected" else 0
+    targeted_count = (
+        len(loaded_assignment.targets) if loaded_assignment.audience == "selected" else 0
+    )
     return _admin_assignment_detail(loaded_assignment, targeted_count)
 
 

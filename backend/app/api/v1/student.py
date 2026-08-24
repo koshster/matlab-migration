@@ -33,7 +33,9 @@ router = APIRouter(prefix="/student", tags=["student"])
 # ---------------------------------------------------------------------------
 
 
-def _student_course_summary(course: Course, assignment_count: int, enrolled_at: datetime) -> dict[str, Any]:
+def _student_course_summary(
+    course: Course, assignment_count: int, enrolled_at: datetime
+) -> dict[str, Any]:
     return {
         "id": str(course.id),
         "code": course.code,
@@ -280,6 +282,17 @@ async def list_student_assignments(
             )
         ).scalars().all()
         active_course_ids = [e.course_id for e in legacy_enrollments]
+
+    if not active_course_ids:
+        # Check if student has direct student_assignments sessions
+        sa_course_rows = (
+            await db.execute(
+                select(Assignment.course_id)
+                .join(StudentAssignment, StudentAssignment.assignment_id == Assignment.id)
+                .where(StudentAssignment.student_id == student_id)
+            )
+        ).scalars().all()
+        active_course_ids = list(set(sa_course_rows))
 
     if not active_course_ids:
         return []

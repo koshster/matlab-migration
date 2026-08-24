@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.security import get_current_instructor_id, get_current_student_id
-from app.db.models import Course, CourseInstructor, Instructor, Student
+from app.db.models import Instructor, Student
 from app.db.session import Base, get_db
 from app.main import app
 

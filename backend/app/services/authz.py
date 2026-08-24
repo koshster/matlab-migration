@@ -6,7 +6,7 @@ for course-scoped access. Resolves membership through `courses.instructor_id`
 """
 
 import uuid
-from typing import Literal, cast
+from typing import Literal
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
@@ -60,7 +60,7 @@ async def _load_role(
     )
     staff = staff_row.scalar_one_or_none()
     if staff is not None and staff.role in _ROLE_ORDER:
-        return cast(CourseRole, staff.role)
+        return staff.role
 
     return None
 

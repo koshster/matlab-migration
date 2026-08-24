@@ -9,6 +9,7 @@ now-deleted `/auth/student/session` route both pre-created the row — but
 """
 
 import uuid
+from collections.abc import AsyncIterator
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -27,7 +28,7 @@ SLUG = "truss-access-test"
 
 
 @pytest.fixture
-async def db():
+async def db() -> AsyncIterator[AsyncSession]:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

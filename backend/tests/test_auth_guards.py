@@ -55,7 +55,7 @@ def test_missing_cookie_is_401() -> None:
     for guard in (get_current_student_id, get_current_instructor_id):
         for empty in (None, ""):
             with pytest.raises(HTTPException) as exc:
-                guard(empty)  # type: ignore[operator]
+                guard(empty)
             assert exc.value.status_code == 401
 
 
@@ -113,7 +113,7 @@ def test_unknown_token_type_is_rejected() -> None:
         (get_current_instructor_id, "instructor_session"),
     ):
         with pytest.raises(HTTPException) as exc:
-            guard(**{kwarg: forged})  # type: ignore[arg-type]
+            guard(**{kwarg: forged})
         assert exc.value.status_code == 401
 
 

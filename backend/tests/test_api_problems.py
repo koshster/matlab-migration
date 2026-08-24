@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Iterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -13,13 +14,13 @@ def _as_signed_in_student() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _clear_overrides():
+def _clear_overrides() -> Iterator[None]:
     yield
     app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_problem_routes_require_a_session():
+async def test_problem_routes_require_a_session() -> None:
     """Unauthenticated access would expose the generator to the open internet."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -30,7 +31,7 @@ async def test_problem_routes_require_a_session():
 
 
 @pytest.mark.asyncio
-async def test_answer_oracle_route_is_gone():
+async def test_answer_oracle_route_is_gone() -> None:
     """`POST /problems/{type}/check` graded a caller-supplied (seed, answers)
     pair without recording an attempt, letting answers be brute-forced one
     member at a time. It must stay deleted."""
@@ -45,7 +46,7 @@ async def test_answer_oracle_route_is_gone():
 
 
 @pytest.mark.asyncio
-async def test_list_problem_types():
+async def test_list_problem_types() -> None:
     _as_signed_in_student()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -57,7 +58,7 @@ async def test_list_problem_types():
 
 
 @pytest.mark.asyncio
-async def test_generate_truss_api():
+async def test_generate_truss_api() -> None:
     _as_signed_in_student()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

@@ -1,4 +1,4 @@
-"""Tests for student invitations, accept/decline flows, course joining, and assignment visibility."""
+"""Tests for student invitations, accept/decline flows, and assignment visibility."""
 
 import uuid
 from collections.abc import AsyncIterator
@@ -11,7 +11,6 @@ from app.core.security import get_current_student_id
 from app.db.models import (
     Assignment,
     AssignmentProblem,
-    AssignmentTarget,
     Course,
     Instructor,
     RosterEntry,

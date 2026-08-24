@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.security import get_current_instructor_id, get_current_student_id
-from app.db.models import Course, CourseInstructor, Instructor, RosterEntry, Student
+from app.db.models import Instructor, Student
 from app.db.session import Base, get_db
 from app.main import app
 
@@ -94,7 +94,12 @@ async def test_create_and_list_courses(admin_client: AsyncClient) -> None:
     # 2. Duplicate rejection
     dup_resp = await admin_client.post(
         "/api/v1/admin/courses",
-        json={"code": "MAE-008", "term": "Fall 2026", "section": "001", "title": "Statics Duplicate"},
+        json={
+            "code": "MAE-008",
+            "term": "Fall 2026",
+            "section": "001",
+            "title": "Statics Duplicate",
+        },
     )
     assert dup_resp.status_code == 409
 
@@ -126,7 +131,12 @@ async def test_roster_batch_import_and_outcomes(admin_client: AsyncClient) -> No
         json={
             "entries": [
                 {"pid": "a12345678", "firstName": "Ada", "lastName": "Lovelace"},
-                {"pid": "A98765432", "email": "charles@ucsd.edu", "firstName": "Charles", "lastName": "Babbage"},
+                {
+                    "pid": "A98765432",
+                    "email": "charles@ucsd.edu",
+                    "firstName": "Charles",
+                    "lastName": "Babbage",
+                },
                 {"firstName": "No", "lastName": "ID"},
                 {"email": "not-an-email", "firstName": "Bad", "lastName": "Email"},
             ]
