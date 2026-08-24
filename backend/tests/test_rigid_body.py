@@ -1,4 +1,15 @@
-"""Unit and integration tests for the 2D Rigid Body equilibrium problem domain."""
+"""Unit and integration tests for the 2D Rigid Body equilibrium problem domain.
+
+This test suite validates:
+1. Registry integration and catalog schema conformance.
+2. Seed reproducibility (identical RNG state produces bit-identical geometry and loads).
+3. Zero solution leakage (reaction forces and solver matrices never appear in public schemas).
+4. Integer Cartesian grid alignment (all nodes and path coordinates lie on whole integers).
+5. Kinematic stability & determinacy checks (pin/roller moment arm and roller parallelism).
+6. Physics equilibrium satisfaction (sum(Fx) = 0, sum(Fy) = 0, sum(Mo) = 0 for all cases).
+7. Student grading logic (evaluation within 1% relative tolerance, partial credit, error handling).
+8. Textbook analytical problem solutions matching legacy MATLAB benchmarks.
+"""
 
 import numpy as np
 import pytest
@@ -38,6 +49,7 @@ def test_rigid_body_zero_solution_leakage() -> None:
     display_data = rigid_body_generator.generate(seed)
     serialized = display_data.model_dump_json()
 
+    # Solution keys must never appear in student-facing JSON
     assert "reactions" not in serialized
     assert "solutionMat" not in serialized
     assert "a_mat" not in serialized
@@ -74,16 +86,16 @@ def test_geometry_path_and_collapse_integrity() -> None:
 
 def test_support_determinacy_validation() -> None:
     """Verify detection of kinematically inadmissible support configurations."""
-    # Collinear vertical pin and roller
+    # Collinear vertical pin and roller (passes through pin -> zero moment arm)
     fixed_pin = [{"r": [0, 0], "rotation": 0}]
     roller_collinear = [{"r": [0, 2], "rotation": 0}]
     assert is_support_configuration_invalid(fixed_pin, roller_collinear, []) is True
 
-    # Non-collinear pin and roller
+    # Non-collinear pin and roller (valid non-zero moment arm)
     roller_valid = [{"r": [2, 1], "rotation": 0}]
     assert is_support_configuration_invalid(fixed_pin, roller_valid, []) is False
 
-    # 3 parallel rollers (all horizontal)
+    # 3 parallel rollers (all horizontal -> unable to resist vertical forces)
     three_horiz_rollers = [
         {"r": [0, 0], "rotation": 90},
         {"r": [1, 1], "rotation": 90},
@@ -105,7 +117,7 @@ def test_all_support_cases_equilibrium_satisfaction(support_case: int) -> None:
         forces = [el.properties for el in display.visual_schema if el.element_type == "point_load"]
         moments = [el.properties for el in display.visual_schema if el.element_type == "moment"]
 
-        # Sum of external and reaction forces
+        # Sum of external forces and moments about origin
         sum_fx = sum(f["force_vector"][0] for f in forces)
         sum_fy = sum(f["force_vector"][1] for f in forces)
         sum_mo = sum(

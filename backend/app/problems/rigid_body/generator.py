@@ -1,8 +1,14 @@
 """2D Rigid Body equilibrium problem domain generator implementing ProblemGeneratorProtocol.
 
-Generates random planar rigid bodies on integer grids with static boundary supports
-(Pin + Roller, 3 Rollers, or Fixed Wall) and external loads, solves global equilibrium
-reactions server-side, and grades student numerical submissions with tolerance verification.
+This module provides the unified domain engine for 2D rigid body statics problems.
+It implements the 6 required protocol members:
+1. `problem_type` -> "rigid_body"
+2. `display_name` -> "2D Rigid Body Equilibrium"
+3. `params_schema` -> Configurable difficulty knobs:
+   (support_case, num_loads, num_moments, max_force)
+4. `generate(seed, params)` -> Emits ProblemDisplayData (zero solution leakage)
+5. `solve(seed, params)` -> Computes exact server-side ground truth reactions
+6. `check(seed, submission, tolerance, params)` -> Evaluates student answers
 """
 
 from typing import Any
@@ -30,17 +36,24 @@ class RigidBodyGenerator:
 
     @property
     def problem_type(self) -> str:
-        """Domain identifier string."""
+        """Unique domain identifier string used by API routes and client renderers."""
         return "rigid_body"
 
     @property
     def display_name(self) -> str:
-        """Human readable name for UI assignment builder."""
+        """Human-readable name displayed in the Assignment Builder UI."""
         return "2D Rigid Body Equilibrium"
 
     @property
     def params_schema(self) -> list[ParamFieldSpec]:
-        """Configurable difficulty knobs for rigid body equilibrium problems."""
+        """Configurable difficulty knobs exposed to instructors in the assignment builder.
+
+        Knobs:
+            - `support_case`: Selects boundary conditions (1: 3 Rollers, 2: Pin+Roller, 3: Wall).
+            - `num_loads`: Number of applied point forces (1 to 4).
+            - `num_moments`: Number of concentrated couple moments (0 to 2).
+            - `max_force`: Upper bound for point force magnitudes in kN (1 to 20).
+        """
         return [
             ParamFieldSpec(
                 name="support_case",
@@ -93,6 +106,8 @@ class RigidBodyGenerator:
         dict[str, list[dict[str, Any]]],
         dict[str, list[dict[str, Any]]],
     ]:
+        """Internal helper to deterministically synthesize geometry, supports, and loads."""
+        # Initialize explicit NumPy RNG from the seed for 100% reproducibility
         rng = np.random.default_rng(seed)
         p = params or {}
 
@@ -104,7 +119,7 @@ class RigidBodyGenerator:
         n_moments = int(p.get("num_moments", 0))
         max_force = float(p.get("max_force", 5.0))
 
-        # Loop until an admissible determinate configuration is synthesized
+        # Iteratively synthesize until an admissible determinate configuration is found
         for _ in range(50):
             path_nodes, unique_nodes, surroundings = generate_rigid_body_geometry(
                 min_nodes=5, rng=rng
@@ -123,7 +138,7 @@ class RigidBodyGenerator:
                 )
                 return path_nodes, unique_nodes, surroundings, supports, loads
 
-        # Deterministic fallback
+        # Deterministic fallback if random synthesis reaches attempt limit
         path_nodes, unique_nodes, surroundings = generate_rigid_body_geometry(
             min_nodes=5, rng=rng, max_attempts=1
         )
@@ -136,14 +151,18 @@ class RigidBodyGenerator:
         return path_nodes, unique_nodes, surroundings, supports, loads
 
     def generate(self, seed: int, params: dict[str, Any] | None = None) -> ProblemDisplayData:
-        """Synthesize problem geometry and display schema. NEVER return solution data."""
+        """Synthesize problem geometry and display schema. NEVER return solution data.
+
+        Emits graphical primitives (path, nodes, pins, rollers, walls, forces, moments)
+        and declarative answer field specifications for student entry.
+        """
         path_nodes, unique_nodes, _surroundings, supports, loads = self._build_instance(
             seed, params
         )
 
         visual_schema: list[VisualElementSchema] = []
 
-        # Continuous rigid body path
+        # 1. Continuous rigid body path (rendered as thick structural members in SVG)
         visual_schema.append(
             VisualElementSchema(
                 element_type="rigid_body_path",
@@ -151,7 +170,7 @@ class RigidBodyGenerator:
             )
         )
 
-        # Unique joints / nodes
+        # 2. Joint / node coordinate points
         for idx, pos in enumerate(unique_nodes):
             visual_schema.append(
                 VisualElementSchema(
@@ -160,7 +179,7 @@ class RigidBodyGenerator:
                 )
             )
 
-        # Supports
+        # 3. Boundary supports (Pins, Rollers, and Fixed Walls)
         for pin in supports.get("fixed_pins", []):
             visual_schema.append(
                 VisualElementSchema(
@@ -197,7 +216,7 @@ class RigidBodyGenerator:
                 )
             )
 
-        # Applied Point Loads
+        # 4. Applied Point Loads (Concentrated force vectors)
         for f in loads.get("forces", []):
             visual_schema.append(
                 VisualElementSchema(
@@ -211,7 +230,7 @@ class RigidBodyGenerator:
                 )
             )
 
-        # Concentrated Moments
+        # 5. Concentrated Couple Moments (Curved moment arcs)
         for m in loads.get("moments", []):
             visual_schema.append(
                 VisualElementSchema(
@@ -227,12 +246,13 @@ class RigidBodyGenerator:
                 )
             )
 
-        # Determine expected answer field specifications based on active supports
+        # 6. Expected Student Answer Fields based on active support reactions
         answer_schema: list[AnswerFieldSpec] = []
         walls = supports.get("walls", [])
         fixed_pins = supports.get("fixed_pins", [])
         rollers = supports.get("rollers", [])
 
+        # Case 3: Fixed Cantilever Wall -> student solves Ax, Ay, MA
         if len(walls) == 1:
             answer_schema.extend([
                 AnswerFieldSpec(
@@ -254,6 +274,8 @@ class RigidBodyGenerator:
                     value_type="numeric",
                 ),
             ])
+
+        # Case 2: Pin + Roller -> student solves Ax, Ay, Bx or By
         elif len(fixed_pins) == 1 and len(rollers) == 1:
             roller_rot = int(rollers[0].get("rotation", 0))
             roller_label = "Bx" if roller_rot in (90, 270) else "By"
@@ -277,6 +299,8 @@ class RigidBodyGenerator:
                     value_type="numeric",
                 ),
             ])
+
+        # Case 1: 3 Rollers -> student solves reactions at A, B, C
         elif len(rollers) == 3:
             support_names = ["A", "B", "C"]
             for i in range(3):
@@ -305,11 +329,11 @@ class RigidBodyGenerator:
         )
 
     def solve(self, seed: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Server-side solver for ground truth reactions and moments."""
+        """Server-side solver for ground truth reactions and moments. Internal use only."""
         _, _, _, supports, loads = self._build_instance(seed, params)
         reactions = solve_rigid_body_reactions(supports, loads)
 
-        # Standardize reaction dictionary keys
+        # Standardize reaction dictionary keys (e.g. 'reaction_Ax', 'reaction_Ay')
         structured_reactions: dict[str, float] = {}
         for k, v in reactions.items():
             field_id = k if k.startswith("reaction_") else f"reaction_{k}"
@@ -327,7 +351,13 @@ class RigidBodyGenerator:
         tolerance: float = 0.01,
         params: dict[str, Any] | None = None,
     ) -> GradingResult:
-        """Stateless evaluation of student answers against ground truth reactions."""
+        """Stateless evaluation of student answers against ground truth reactions.
+
+        Grading Rules:
+            - Numeric fields are evaluated within relative tolerance:
+              delta = |submitted - expected| <= tolerance * max(|expected|, 1.0)
+            - Supports both prefixed keys ('reaction_Ax') and short keys ('Ax').
+        """
         ground_truth = self.solve(seed, params)
         expected_reactions = ground_truth["reactions"]
 
@@ -336,7 +366,7 @@ class RigidBodyGenerator:
         total_fields = len(expected_reactions)
 
         for field_id, expected_val in expected_reactions.items():
-            # Allow submission with or without 'reaction_' prefix
+            # Allow submission with or without 'reaction_' prefix for student convenience
             short_id = field_id.replace("reaction_", "")
             submitted_val = submission.answers.get(field_id)
             if submitted_val is None:
@@ -347,6 +377,7 @@ class RigidBodyGenerator:
                     sub_num = float(submitted_val)
                     exp_num = float(expected_val)
                     delta = abs(sub_num - exp_num)
+                    # Check tolerance threshold (e.g. within 1%)
                     is_corr = delta <= (tolerance * max(abs(exp_num), 1.0))
                     if is_corr:
                         correct_count += 1
@@ -376,6 +407,6 @@ class RigidBodyGenerator:
         )
 
 
-# Register Rigid Body generator instance with problem registry
+# Automatically register Rigid Body generator instance with problem registry
 rigid_body_generator = RigidBodyGenerator()
 problem_registry.register(rigid_body_generator)
