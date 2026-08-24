@@ -19,7 +19,8 @@ from app.db.session import get_db
 CourseRole = Literal["owner", "instructor", "ta", "reader"]
 
 # Ordered least- to most-privileged; `_at_least` compares by index.
-_ROLE_ORDER: tuple[CourseRole, ...] = ("reader", "ta", "instructor", "owner")
+ROLE_HIERARCHY: tuple[CourseRole, ...] = ("reader", "ta", "instructor", "owner")
+_ROLE_ORDER = ROLE_HIERARCHY
 
 
 def _at_least(actual: CourseRole, minimum: CourseRole) -> bool:
@@ -63,6 +64,13 @@ async def _load_role(
         return staff.role
 
     return None
+
+
+async def get_effective_course_role(
+    db: AsyncSession, course_id: uuid.UUID, instructor: Instructor
+) -> CourseRole | None:
+    """Public helper returning effective role of an instructor on a course."""
+    return await _load_role(db, course_id, instructor.id)
 
 
 async def assert_course_role(

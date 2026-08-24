@@ -64,6 +64,8 @@ extend-immutable-calls = [
 # Request/response models mirror the camelCase wire contract in openapi.yaml,
 # so mixed-case field names are intentional there.
 "app/api/v1/*.py" = ["N815"]
+"app/api/v1/**/*.py" = ["N815"]
+"app/schemas/*.py" = ["N815"]
 
 [tool.mypy]
 strict = true
