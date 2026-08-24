@@ -2,9 +2,11 @@
 
 ## 1. Executive Summary
 
-This backend powers the web-based Statics Problem Platform designed to replace legacy MATLAB desktop applications for engineering education. 
+This backend powers the web-based Statics Problem Platform designed to replace legacy MATLAB desktop applications for undergraduate engineering education.
 
-Students access homework problems directly in their web browser without installing MATLAB. The backend dynamically synthesizes randomized statics problems (starting with 2D Trusses, and extensible to Rigid Bodies, Frames, and Beams), evaluates student answers server-side with numerical tolerances, and securely records attempts in an access-controlled database.
+Students solve randomized engineering mechanics problems directly in their web browsers without needing MATLAB installed. The backend synthesizes unique problem instances (starting with Planar Trusses, and extensible to Beams and Rigid Bodies), evaluates student answers server-side with numerical tolerances, and securely records attempts in an access-controlled database.
+
+For instructors, the platform provides course management, batch roster CSV importing, teaching staff role assignment, and an assignment builder that lets professors configure variable numbers of problems ($1 \dots N$), select problem types, and tune difficulty knobs per problem slot.
 
 ---
 
@@ -12,7 +14,7 @@ Students access homework problems directly in their web browser without installi
 
 * **FastAPI (Python Web Server)**: The engine that listens for requests from the browser, runs our mechanics algorithms, and sends back problem diagrams and grading results.
 * **Docker & Docker Compose**: Packages the Python code, dependencies, and database into isolated virtual containers. This ensures the application runs identically on any computer (Mac, Windows, Linux, or cloud servers) without configuration conflicts.
-* **PostgreSQL (Database)**: A relational database where student accounts, assignments, random problem seeds, and attempt logs are stored.
+* **PostgreSQL (Database)**: A production-grade relational database where student accounts, course rosters, assignments, random problem seeds, and attempt logs are stored.
 * **SQLAlchemy & Alembic (Database Manager & Migrations)**:
   * *SQLAlchemy* connects Python code to the database without requiring raw database query languages.
   * *Alembic* acts as version control for database tables, ensuring schema updates can be applied smoothly over time.
@@ -22,284 +24,264 @@ Students access homework problems directly in their web browser without installi
 
 ## 3. SOLID Design Principles (Why the Architecture Scales)
 
-To prevent the code duplication and maintenance challenges of the legacy MATLAB desktop apps, this backend strictly follows the **SOLID** software engineering principles:
+To prevent code duplication and maintenance challenges, this backend strictly follows the **SOLID** software engineering principles:
 
 * **S — Single Responsibility Principle (SRP)**:
-  * *Concept*: Every component has one, and only one, job.
-  * *In our code*: `geometry.py` only creates joint coordinates and triangles. `solver.py` only performs physics matrix algebra. `models.py` only defines database tables. No single file tries to do everything.
+  * Every component has one, and only one, job.
+  * `geometry.py` only creates joint coordinates and triangles. `solver.py` only performs physics matrix algebra. `models.py` only defines database tables. `admin.py` and `student.py` handle HTTP routing and security.
 * **O — Open-Closed Principle (OCP)**:
-  * *Concept*: Open for extension, closed for modification.
-  * *In our code*: When adding future problem types (such as 2D Frames, Beams, or Centroids), we simply write one new domain class and register it with `ProblemRegistry`. We **never** need to modify the web controllers, database schemas, or grading pipelines.
+  * Open for extension, closed for modification.
+  * When adding future problem types (such as Rigid Bodies, Beams, or Frames), we simply write one new domain class implementing `ProblemGeneratorProtocol` and register it in `app/problems/__init__.py`. We **never** need to modify the web controllers, database schemas, or grading pipelines.
 * **L — Liskov Substitution Principle (LSP)**:
-  * *Concept*: Any specialized component can be swapped in without breaking the system.
-  * *In our code*: Every problem domain implements `ProblemGeneratorProtocol`. Whether the system is handling a 3-node Truss or a future 10-node Frame, the API server interacts with them identically.
+  * Any specialized problem type can be swapped in without breaking the system.
+  * Every problem domain implements `ProblemGeneratorProtocol`. Whether the system is handling a 3-joint Truss, a 13-member Truss, or a Beam, the API server interacts with them identically.
 * **I — Interface Segregation Principle (ISP)**:
-  * *Concept*: Components only rely on the specific methods they need.
-  * *In our code*: The student presentation contract (`ProblemDisplayData`) is completely separated from the server-side grading solver (`solve`), ensuring zero solution leakage to the browser.
+  * Components only rely on the specific interfaces they need.
+  * The student presentation contract (`ProblemDisplayData`) is completely separated from the server-side grading solver (`solve`), ensuring zero solution leakage to the browser.
 * **D — Dependency Inversion Principle (DIP)**:
-  * *Concept*: Depend on high-level abstractions, not hardcoded concrete implementations.
-  * *In our code*: The web routes depend on abstract protocols and database session interfaces (`AsyncSession`), not on specific database drivers or hardcoded problem files.
+  * Depend on high-level abstractions, not hardcoded concrete implementations.
+  * The web routes depend on abstract protocols and database session interfaces (`AsyncSession`), not on specific database drivers or hardcoded problem files.
 
 ---
 
-## 4. How a Statics Problem Works (Workflow Diagram)
+## 4. Problem Mechanics & Extensibility
 
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Student
-    participant Frontend as React Web App
-    participant Controller as FastAPI Server
-    participant Generator as Problem Engine
-    participant Solver as Matrix Solver (SciPy)
-    participant Database as PostgreSQL Database
-
-    Note over Student,Database: Step 1: Homework Generation
-    Student->>Frontend: Opens Assignment Problem
-    Frontend->>Controller: GET Problem (assignment_id, problem_index)
-    Controller->>Database: Fetch Student Seed (e.g. seed = 42)
-    Database-->>Controller: Return Seed & Parameters
-    Controller->>Generator: generate(seed, params)
-    Generator-->>Controller: Return Geometry, Supports, Loads (NO Solution)
-    Controller-->>Frontend: Send Visual SVG Primitives & Answer Form
-    Frontend-->>Student: Renders Interactive 2D Problem Diagram
-
-    Note over Student,Database: Step 2: Answer Submission & Grading
-    Student->>Frontend: Submits Calculated Member Forces & States
-    Frontend->>Controller: POST Submission (answers, seed)
-    Controller->>Generator: check(seed, answers, tolerance = 0.01)
-    Generator->>Solver: solve(seed) -> Ground Truth Reactions & Forces
-    Solver-->>Generator: Ground Truth Solution Values
-    Generator->>Generator: Compare Student Answers against Ground Truth
-    Generator-->>Controller: Grading Verdicts & Score (Pass / Fail)
-    Controller->>Database: Save Attempt Log & Update Student Score
-    Controller-->>Frontend: Return Pass/Fail Status & Feedback
-    Frontend-->>Student: Display Real-Time Grading Results
-```
-
----
-
-## 5. Mechanics Generation & Equilibrium Rules
-
+### Planar Truss Problem Domain
 The 2D Truss problem generator follows classical structural analysis principles:
 1. **Integer Coordinate Grid**: All joints/nodes lie on clean integer coordinates for ease of student calculation.
-2. **Angle Invariant**: Internal member angles are strictly constrained to at least 45 degrees, preventing needle-thin or overlapping members.
+2. **Angle Invariant**: Internal member angles are strictly constrained to at least 30 to 45 degrees, preventing needle-thin or overlapping members.
 3. **Simple Truss Determinacy**: Structural geometry enforces the planar simple truss formula:
    $$m = 2n - 3$$
    *(where $m$ is member count and $n$ is joint count)*.
+   * $n = 3 \text{ joints} \implies m = 3 \text{ members}$
+   * $n = 4 \text{ joints} \implies m = 5 \text{ members}$
+   * $n = 5 \text{ joints} \implies m = 7 \text{ members}$
+   * $n = 6 \text{ joints} \implies m = 9 \text{ members}$
+   * $n = 7 \text{ joints} \implies m = 11 \text{ members}$
+   * $n = 8 \text{ joints} \implies m = 13 \text{ members}$
 4. **Support Boundary Conditions**: Pin and roller supports are placed on boundary joints with guaranteed moment arms, ensuring static determinacy (non-singular equilibrium matrix).
-5. **Applied Point Loads**: Integer force magnitudes (1 to 5 kN) are applied strictly to unsupported upper joints.
+5. **Applied Point Loads**: Integer force magnitudes (1 to 5 kN) are applied strictly to unsupported joints.
+
+### Configurable Difficulty Knobs
+Each problem generator declares its own parameter schema (`params_schema`), allowing the Assignment Builder UI to dynamically render sliders and dropdowns without hardcoding domain details:
+* **Planar Truss**: `num_nodes` (joint count), `max_force` (maximum load in kN), `load_count` (number of applied loads).
+* **Beam**: `span_length` (length of beam), `load_type` (point loads vs distributed loads).
+* **Rigid Body**: `body_shape` (rectangular, L-shaped, T-shaped), `num_loads` (number of forces/couples).
 
 ---
 
-## 6. Database Schema & Entity Relationships
-
-The database maintains strict separation between course administration and problem mechanics. The Entity-Relationship diagram below illustrates how all records link together:
+## 5. Database Schema & Entity Relationships
 
 ```mermaid
 erDiagram
-    STUDENT ||--o{ COURSE_ENROLLMENT : holds
-    COURSE ||--o{ COURSE_ENROLLMENT : rosters
-    INSTRUCTOR ||--o{ COURSE : teaches
+    INSTRUCTOR ||--o{ COURSE : owns
+    INSTRUCTOR ||--o{ COURSE_INSTRUCTOR : joins
+    COURSE ||--o{ COURSE_INSTRUCTOR : employs
+    COURSE ||--o{ ROSTER_ENTRY : rosters
     COURSE ||--o{ ASSIGNMENT : contains
-    ASSIGNMENT ||--o{ ASSIGNMENT_PROBLEM : includes
-    ASSIGNMENT ||--o{ STUDENT_ASSIGNMENT : tracks
+    STUDENT ||--o{ ROSTER_ENTRY : links
     STUDENT ||--o{ STUDENT_ASSIGNMENT : undertakes
-    STUDENT_ASSIGNMENT ||--o{ SUBMISSION : records
-
-    STUDENT {
-        uuid id PK
-        string pid UK "UCSD Student PID (e.g. A12345678)"
-        string email UK "@ucsd.edu university email"
-        string name "Student full name"
-        datetime created_at
-    }
+    ASSIGNMENT ||--o{ ASSIGNMENT_PROBLEM : contains
+    ASSIGNMENT ||--o{ ASSIGNMENT_TARGET : targets
+    ROSTER_ENTRY ||--o{ ASSIGNMENT_TARGET : targeted_by
+    ASSIGNMENT ||--o{ STUDENT_ASSIGNMENT : tracks
+    STUDENT_ASSIGNMENT ||--o{ SUBMISSION : logs
 
     INSTRUCTOR {
         uuid id PK
         string email UK "Login email"
-        string password_hash "Argon2id password hash"
-        string name "Instructor / TA name"
+        string password_hash "Argon2id hash"
+        string name "Instructor name"
         datetime created_at
     }
 
     COURSE {
         uuid id PK
-        uuid instructor_id FK "Course creator"
-        string code "e.g. MAE 130A"
+        uuid instructor_id FK "Course owner"
+        string code "e.g. ENGR301"
         string term "e.g. Fall 2026"
+        string section "e.g. 001"
+        string title "Course title"
+        boolean is_archived "Archived status"
         datetime created_at
     }
 
-    COURSE_ENROLLMENT {
+    COURSE_INSTRUCTOR {
         uuid id PK
-        uuid course_id FK "Course section"
-        uuid student_id FK "Enrolled student"
-        string status "active, dropped, auditing"
-        datetime enrolled_at
-        datetime dropped_at "Set if student drops course"
+        uuid course_id FK "Course"
+        uuid instructor_id FK "Staff member"
+        string role "owner, instructor, ta, reader"
+        datetime created_at
+    }
+
+    ROSTER_ENTRY {
+        uuid id PK
+        uuid course_id FK "Course"
+        uuid student_id FK "Nullable linked student"
+        string pid "Student ID (e.g. A10000001)"
+        string email "Student email"
+        string first_name "First name"
+        string last_name "Last name"
+        string status "invited, active, dropped"
+        datetime invited_at
+        datetime accepted_at
     }
 
     ASSIGNMENT {
         uuid id PK
-        uuid course_id FK "Owning course"
-        string title "e.g. Homework 1: Trusses"
-        float tolerance "Default 0.01 (+/- 1%)"
-        string feedback_mode "Default per_field"
-        int max_attempts "Default NULL (Unlimited)"
-        float penalty_per_attempt "Default 0.0"
-        string scoring_strategy "Default pass_fail (1 or 0)"
-        boolean allow_late "Default false (No late accepted)"
-        float late_penalty_rate "Default 0.0"
-        boolean is_active "Default true"
-        datetime due_at "Official deadline"
-        datetime hard_deadline_at "Hard cutoff"
+        uuid course_id FK "Course"
+        string slug UK "URL slug"
+        string title "Assignment title"
+        string instructions "Instructions text"
+        float tolerance "Grading tolerance (default 0.01)"
+        string feedback_mode "per_field or overall"
+        int max_attempts "Attempt limit (NULL = unlimited)"
+        boolean is_published "Visibility flag"
+        string audience "all or selected"
+        datetime opens_at "Release timestamp"
+        datetime due_at "Due date"
         datetime created_at
     }
 
     ASSIGNMENT_PROBLEM {
         uuid id PK
-        uuid assignment_id FK "Owning assignment"
-        string problem_type "e.g. truss, frame_2d"
-        int order_index "Problem slot (1 to N)"
-        jsonb params "Config parameters (e.g. num_nodes)"
+        uuid assignment_id FK "Assignment"
+        string problem_type "truss, beam, rigid_body"
+        int order_index "Problem slot index"
+        float points "Points weight"
+        jsonb params "Difficulty knobs (e.g. num_nodes)"
+    }
+
+    ASSIGNMENT_TARGET {
+        uuid id PK
+        uuid assignment_id FK "Assignment"
+        uuid roster_entry_id FK "Targeted roster student"
+    }
+
+    STUDENT {
+        uuid id PK
+        string pid UK "Student PID"
+        string first_name "First name"
+        string last_name "Last name"
+        string password_hash "Argon2id hash"
+        datetime created_at
     }
 
     STUDENT_ASSIGNMENT {
         uuid id PK
         uuid student_id FK "Student"
         uuid assignment_id FK "Assignment"
-        int seed "Unique immutable random seed per student/assignment"
+        int seed "Deterministic random seed"
+        jsonb draft_answers "Saved unsubmitted work"
         datetime started_at
         datetime submitted_at
-        float final_score "Total assignment grade"
+        float final_score "Total grade"
     }
 
     SUBMISSION {
         uuid id PK
-        uuid student_assignment_id FK "Student session"
+        uuid student_assignment_id FK "Student assignment"
         uuid assignment_problem_id FK "Problem slot"
-        int attempt_number "Attempt count (1, 2, 3...)"
-        jsonb answers "Submitted student answer dictionary"
-        float raw_score "Unadjusted score (1.0 or 0.0)"
-        float net_score "Score after any penalties"
-        boolean is_passed "True if all answers within tolerance"
-        jsonb field_verdicts "Detailed per-member pass/fail verdicts"
+        int attempt_number "Attempt number"
+        jsonb answers "Submitted answers"
+        float raw_score "Raw score"
+        float net_score "Adjusted score"
+        boolean is_passed "Pass/Fail status"
+        jsonb field_verdicts "Per-field feedback"
         datetime submitted_at
     }
 ```
 
 ---
 
-## 7. Architecture & File Structure
+## 6. End-to-End User Workflows
 
-```mermaid
-graph TD
-    Client["Student / Instructor Browser"] -->|HTTP / JSON| Controller["FastAPI Controllers (app/api/v1/)"]
-    
-    subgraph Backend Architecture
-        Controller -->|Lookup| Registry["Problem Registry (app/problems/registry.py)"]
-        Controller -->|Query / Save| Session["Async Database Session (app/db/session.py)"]
-        
-        Registry -->|Dispatch| Domain["Problem Domain Engine (app/problems/truss/)"]
-        Domain -->|Generate| Geometry["Geometry & Supports Builder"]
-        Domain -->|Solve| Solver["Matrix Equilibrium Solver (A * s = b)"]
-        
-        Session -->|Read / Write| Postgres[("PostgreSQL Database")]
-    end
-```
-
-### Directory Layout
-
-```
-backend/
-├── alembic/                 # Database schema migration scripts
-├── app/
-│   ├── api/v1/              # Web route controllers (health, problems, assignments)
-│   ├── core/                # Configuration and environment settings
-│   ├── db/                  # Database session and SQLAlchemy table models
-│   │   ├── session.py       # Async engine & get_db dependency
-│   │   └── models.py        # Relational ORM models
-│   └── problems/            # Mechanics domain engine
-│       ├── base.py          # Unified problem generator interface protocol
-│       ├── registry.py      # Dynamic problem type registry
-│       └── truss/           # 2D Truss generator, geometry, supports, loads, solver
-│           ├── generator.py # TrussGenerator implementing protocol
-│           ├── geometry.py  # Delaunay triangulation & angle checks
-│           ├── supports.py  # Pin & roller support placement
-│           ├── loads.py     # External point force generator
-│           └── solver.py    # Reactions & member forces linear solvers
-├── tests/                   # Automated test suite (physics, database, API routes)
-├── Dockerfile               # Container build blueprint
-└── pyproject.toml           # Python dependency and build configuration
-```
-
----
-
-## 8. How to Run and Test the Backend (Step-by-Step Guide)
-
-
-You do not need prior software engineering experience or Python installations on your computer to run and test this backend. Docker manages all dependencies automatically.
-
----
-
-### Step 1: Ensure Docker Desktop is Running
-1. Open the **Docker Desktop** application from your Applications or Start Menu.
-2. Wait a few seconds until the status in the bottom-left corner turns green and indicates **"Engine running"**.
-
----
-
-### Step 2: Start the Backend Server
-Open your terminal (PowerShell on Windows or Terminal on Mac) in the project directory and run:
-
-```bash
-docker compose up backend postgres
-```
-
-What happens:
-* Starts the PostgreSQL database container.
-* Starts the FastAPI backend server with live auto-reloading.
-
----
-
-### Step 3: Test and Generate Problems in Your Web Browser
-Once the backend is running, open your web browser (Chrome, Safari, Edge, or Firefox) and navigate to:
-
-**`http://localhost:8000/api/docs`**
-
-This opens an interactive graphical testing dashboard (Swagger UI):
-1. Scroll to the **`problems`** section.
-2. Click on **`POST /api/v1/problems/{problem_type}/generate`**.
-3. Click the white **Try it out** button on the right.
-4. Set `problem_type` to: `truss`
-5. In the request body text box, enter:
-   ```json
-   {
-     "seed": 42
-   }
+### 1. Instructor Course & Roster Management
+1. **Course Setup**: The instructor creates a course (e.g., `ENGR301`, `Fall 2026`). The creator is automatically assigned the `owner` role in `course_instructors`.
+2. **Staff Invitation**: The instructor can add colleagues or TAs by email with specific permission levels (`instructor`, `ta`, `reader`).
+3. **Roster CSV Import**: The instructor pastes CSV data containing student PIDs, emails, and names:
+   ```text
+   A10000001, alice@university.edu, Alice, Smith
+   A10000002, bob@university.edu, Bob, Jones
    ```
-6. Click the blue **Execute** button.
-7. Under **Server response (Code 200)**, you will see the generated structural geometry (joints, member connections, pin/roller supports, and downward point loads).
+   * The backend validates rows, skips duplicates, and creates `RosterEntry` records with status `"invited"`.
+   * If a student already has an account, it is immediately linked (`student_id = student.id`). Otherwise, it remains ready for automatic linking when the student registers.
+
+### 2. Assignment Builder & Problem Configuration
+1. **Assignment Creation**: The instructor creates an assignment with custom instructions, due dates, grading tolerances (e.g. $\pm 1\%$), and attempt limits.
+2. **Variable Problem Slots**: The instructor adds any number of problems ($1 \dots N$). Each problem slot can be a different problem domain (Truss, Beam, Rigid Body) with custom difficulty knobs and points weighting.
+3. **Presets & Difficulty Ramps**: The instructor can select difficulty presets (e.g., `Standard (8)`, `Gentle (6)`, `Steep (8)`) or customize each slot individually.
+4. **Zero-Leakage Preview**: The instructor clicks "Preview" on any problem slot to inspect the SVG rendering and student prompt with randomized seeds, while solution data remains strictly protected.
+5. **Publishing**: The instructor toggles "Publish" (prevented if the assignment contains 0 problems).
+
+### 3. Student Registration & Homework Solving
+1. **Account Registration**: A student registers with their university PID (`A10000001`) and a secure password (minimum 8 characters).
+2. **Auto-Linking**: The registration endpoint automatically finds all unlinked roster entries matching the student's PID and links them to the new account.
+3. **Course Invitations**: The student visits their dashboard and sees pending invitations for courses they were rostered in.
+4. **Accepting Invitations**: Clicking "Accept" updates the roster entry status to `"active"` and reveals the course's published assignments.
+5. **Interactive Solving & Instant Grading**:
+   * Opening an assignment assigns an immutable random seed to the student.
+   * Each problem slot generates unique geometry from that seed.
+   * The student calculates member forces and submits answers.
+   * The backend solver calculates exact ground truth on-the-fly, evaluates answers within the configured tolerance, records the attempt log, and provides instant feedback.
 
 ---
 
-### Step 4: Run the Complete Automated Verification Test Suite
-To verify that all physics math, database operations, and API endpoints are working correctly without starting the browser, open a new terminal window and run:
+## 7. How to Run the Application Locally
 
-```bash
-docker compose run --rm backend pytest -v
-```
+### Option A: Using Docker (Recommended)
 
-What this test suite verifies:
-* **Physics & Solvability (`test_problems.py`)**: Tests 40+ random seeds to verify that joint equilibrium equations ($\sum F_x = 0, \sum F_y = 0, \sum M = 0$), matrix solver calculations, minimum $45^\circ$ angles, integer coordinates, and $m = 2n - 3$ determinacy are 100% mathematically correct.
-* **Security & Invariants**: Confirms that internal reaction forces and member answers are never leaked in student-facing payloads.
-* **Database & Enrollments (`test_db.py`)**: Verifies that instructors, student rosters, courses, assignment problem slots, student seeds, and attempt logs persist correctly.
-* **API Endpoints (`test_api_problems.py`)**: Verifies that the web server answers generation and grading requests properly.
-
-A green `PASSED` next to every test confirms that the backend is fully verified and ready.
+1. **Start the database and backend**:
+   ```bash
+   docker compose up -d
+   ```
+2. **Apply database migrations**:
+   ```bash
+   docker compose run --rm backend alembic upgrade head
+   ```
+3. **Seed initial demonstration data**:
+   ```bash
+   docker compose run --rm backend python -m app.scripts.seed
+   ```
+4. **Start the frontend**:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+5. Open your browser to **`http://localhost:5173`**.
 
 ---
 
-### Step 5: How to Stop the Backend
-When you are finished testing, return to the terminal where the server is running and press **`Ctrl + C`** on your keyboard to shut down the containers cleanly.
+### Option B: Running Backend Locally with Python Virtual Environment
+
+1. **Activate virtual environment**:
+   ```powershell
+   cd backend
+   .\venv\Scripts\Activate.ps1
+   ```
+2. **Install dependencies**:
+   ```powershell
+   pip install -e ".[dev]"
+   ```
+3. **Run unit & integration tests**:
+   ```powershell
+   pytest
+   ```
+4. **Run code quality and type checks**:
+   ```powershell
+   ruff check app tests
+   mypy --strict app tests
+   ```
+
+---
+
+## 8. Default Seed Credentials for Testing
+
+* **Instructor Portal**:
+  * URL: `http://localhost:5173/admin/login`
+  * Email: `marko@university.edu`
+  * Password: `statics2026`
+* **Student Portal**:
+  * URL: `http://localhost:5173/student/login`
+  * PID: `demo001`
+  * Password: `demo1234`
