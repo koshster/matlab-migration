@@ -38,7 +38,7 @@ def solve_support_reactions(
         moments: Optional list of applied concentrated external moments.
 
     Returns:
-        Dictionary mapping reaction force names (e.g. 'Ax', 'Ay', 'By') to their numerical values (kN).
+        Dictionary mapping reaction force names (e.g. 'Ax', 'By') to their numerical values (kN).
     """
     if moments is None:
         moments = []
