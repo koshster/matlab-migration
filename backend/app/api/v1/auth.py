@@ -54,13 +54,17 @@ async def _link_roster_entries(db: AsyncSession, student: Student) -> None:
     """Auto-link unlinked roster entries matching the student's normalized PID."""
     norm_pid = normalize_pid(student.pid)
     unlinked_rows = (
-        await db.execute(
-            select(RosterEntry).where(
-                func.upper(RosterEntry.pid) == norm_pid,
-                RosterEntry.student_id.is_(None),
+        (
+            await db.execute(
+                select(RosterEntry).where(
+                    func.upper(RosterEntry.pid) == norm_pid,
+                    RosterEntry.student_id.is_(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for entry in unlinked_rows:
         entry.student_id = student.id
         db.add(entry)
@@ -83,9 +87,7 @@ async def register_student(
 ) -> dict[str, Any]:
     """Register a new student, automatically linking matching roster entries."""
     norm_pid = normalize_pid(body.pid)
-    existing_row = await db.execute(
-        select(Student).where(func.upper(Student.pid) == norm_pid)
-    )
+    existing_row = await db.execute(select(Student).where(func.upper(Student.pid) == norm_pid))
     if existing_row.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="PID already registered")
 
@@ -114,9 +116,7 @@ async def login_student(
 ) -> dict[str, Any]:
     """Authenticate student via PID and password, auto-linking any new course roster entries."""
     norm_pid = normalize_pid(body.pid)
-    student_row = await db.execute(
-        select(Student).where(func.upper(Student.pid) == norm_pid)
-    )
+    student_row = await db.execute(select(Student).where(func.upper(Student.pid) == norm_pid))
     student = student_row.scalar_one_or_none()
 
     if (
@@ -157,13 +157,9 @@ async def register_instructor(
 ) -> dict[str, Any]:
     """Register a new instructor or TA account."""
     email = body.email
-    existing_row = await db.execute(
-        select(Instructor).where(func.lower(Instructor.email) == email)
-    )
+    existing_row = await db.execute(select(Instructor).where(func.lower(Instructor.email) == email))
     if existing_row.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     instructor = Instructor(
         email=email,

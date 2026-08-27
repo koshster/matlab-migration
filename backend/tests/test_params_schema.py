@@ -76,9 +76,7 @@ def test_max_force_bounds_load_magnitudes(max_force: int) -> None:
 @pytest.mark.parametrize("load_count", [1, 2])
 def test_load_count_controls_how_many_loads_are_applied(load_count: int) -> None:
     for seed in range(20):
-        g = _geometry(
-            seed=seed, params={"problem_id": 1, "num_nodes": 6, "load_count": load_count}
-        )
+        g = _geometry(seed=seed, params={"problem_id": 1, "num_nodes": 6, "load_count": load_count})
         assert len(g["forces"]) == load_count
 
 

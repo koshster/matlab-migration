@@ -217,6 +217,7 @@ async def test_student_registration_auto_links_roster_entry(db_session: AsyncSes
 
     # 2. Student registers with PID "b99999999" (lowercase)
     transport = ASGITransport(app=app)
+
     async def _db() -> AsyncIterator[AsyncSession]:
         yield db_session
 

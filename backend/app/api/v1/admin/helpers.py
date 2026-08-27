@@ -15,36 +15,46 @@ def _build_truss_geometry(visual_schema: list[VisualElementSchema]) -> dict[str,
 
     for el in visual_schema:
         if el.element_type == "node":
-            nodes.append({
-                "id": el.properties["id"],
-                "x": el.properties["x"],
-                "y": el.properties["y"],
-            })
+            nodes.append(
+                {
+                    "id": el.properties["id"],
+                    "x": el.properties["x"],
+                    "y": el.properties["y"],
+                }
+            )
         elif el.element_type == "member":
-            members.append({
-                "id": el.properties["id"],
-                "startNode": el.properties["start_node"],
-                "endNode": el.properties["end_node"],
-            })
+            members.append(
+                {
+                    "id": el.properties["id"],
+                    "startNode": el.properties["start_node"],
+                    "endNode": el.properties["end_node"],
+                }
+            )
         elif el.element_type == "pin":
-            supports.append({
-                "type": "pin",
-                "nodeId": el.properties["node_index"],
-                "r": el.properties["r"],
-            })
+            supports.append(
+                {
+                    "type": "pin",
+                    "nodeId": el.properties["node_index"],
+                    "r": el.properties["r"],
+                }
+            )
         elif el.element_type == "roller":
-            supports.append({
-                "type": "roller",
-                "nodeId": el.properties["node_index"],
-                "r": el.properties["r"],
-                "rotation": el.properties.get("rotation", 0),
-            })
+            supports.append(
+                {
+                    "type": "roller",
+                    "nodeId": el.properties["node_index"],
+                    "r": el.properties["r"],
+                    "rotation": el.properties.get("rotation", 0),
+                }
+            )
         elif el.element_type == "point_load":
-            forces.append({
-                "nodeId": el.properties["node_index"],
-                "fx": el.properties["force_vector"][0],
-                "fy": el.properties["force_vector"][1],
-            })
+            forces.append(
+                {
+                    "nodeId": el.properties["node_index"],
+                    "fx": el.properties["force_vector"][0],
+                    "fy": el.properties["force_vector"][1],
+                }
+            )
 
     # Compute bounding box
     xs = [n["x"] for n in nodes]
@@ -70,18 +80,22 @@ def _build_answer_schema(members: list[dict[str, Any]]) -> dict[str, Any]:
     """Build answer input field schema for each truss member."""
     fields: list[dict[str, Any]] = []
     for m in members:
-        fields.append({
-            "name": f"force_{m['id']}",
-            "label": f"{m['id']} force",
-            "type": "number",
-            "unit": "kN",
-        })
-        fields.append({
-            "name": f"state_{m['id']}",
-            "label": f"{m['id']} state",
-            "type": "choice",
-            "choices": ["T", "C", "Zero"],
-        })
+        fields.append(
+            {
+                "name": f"force_{m['id']}",
+                "label": f"{m['id']} force",
+                "type": "number",
+                "unit": "kN",
+            }
+        )
+        fields.append(
+            {
+                "name": f"state_{m['id']}",
+                "label": f"{m['id']} state",
+                "type": "choice",
+                "choices": ["T", "C", "Zero"],
+            }
+        )
     return {"groups": [{"label": "Member Forces & States", "fields": fields}]}
 
 

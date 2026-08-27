@@ -87,6 +87,18 @@ filterwarnings = [
     "ignore::DeprecationWarning:passlib.*",
 ]
 
+[tool.coverage.run]
+source = ["app"]
+concurrency = ["thread", "greenlet"]
+omit = ["app/scripts/seed.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
