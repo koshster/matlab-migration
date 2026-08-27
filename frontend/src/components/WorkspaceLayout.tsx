@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSession } from '../context/SessionContext'
 import { useAssignment, useProblem, useSaveAnswers, useCheckAnswers, useSubmit } from '../api/hooks'
@@ -21,6 +21,7 @@ export default function WorkspaceLayout() {
   const [lastCheck, setLastCheck] = useState<CheckResult | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
 
   const { data: assignment } = useAssignment(slug)
   const { data: problem, isLoading: problemLoading, isError: problemError } = useProblem(slug, currentIndex)
@@ -31,17 +32,36 @@ export default function WorkspaceLayout() {
   const locked = assignment?.locked ?? false
   const totalProblems = assignment?.problemCount ?? 0
 
-  // Reset per-problem state when navigating
+  // Reset per-problem state when navigating to a new problem
   useEffect(() => {
     setAnswers(problem?.savedAnswers ?? {})
     setLastCheck(null)
+    setIsDirty(false)
   }, [currentIndex, problem?.savedAnswers])
 
+  // Warn on browser tab close/refresh when there are unsaved changes
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
+  const confirmLeave = useCallback(() => {
+    if (!isDirty) return true
+    return window.confirm('You have unsaved answers. Leave without saving?')
+  }, [isDirty])
+
   function navigate_problem(index: number) {
-    // Wrap within 1..totalProblems (e.g. 0 → last, total+1 → 1)
     if (totalProblems < 1) return
+    if (!confirmLeave()) return
     const next = ((((index - 1) % totalProblems) + totalProblems) % totalProblems) + 1
     setCurrentIndex(next)
+  }
+
+  function handleBack() {
+    if (!confirmLeave()) return
+    navigate('/student/dashboard')
   }
 
   function handleCheck() {
@@ -60,6 +80,7 @@ export default function WorkspaceLayout() {
       {
         onSuccess: () => {
           setSaveStatus('saved')
+          setIsDirty(false)
           setTimeout(() => { setSaveStatus('idle') }, 2000)
         },
         onError: () => { setSaveStatus('idle') },
@@ -119,11 +140,21 @@ export default function WorkspaceLayout() {
                 <rect y="15" width="20" height="2" rx="1" />
               </svg>
             </button>
-            <div>
-              <span className="text-sm font-semibold text-gray-800">
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700"
+              aria-label="Back to assignments"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              My Assignments
+            </button>
+            <span className="hidden text-gray-300 lg:inline">|</span>
+            <div className="hidden lg:block">
+              <span className="text-sm text-gray-500">
                 {session.firstName} {session.lastName}
               </span>
-              <span className="ml-2 text-xs text-gray-400">{session.studentId}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -184,6 +215,7 @@ export default function WorkspaceLayout() {
                     onChange={(key, val) => {
                       setAnswers((prev) => ({ ...prev, [key]: val }))
                       setLastCheck(null)
+                      setIsDirty(true)
                     }}
                     disabled={locked}
                   />

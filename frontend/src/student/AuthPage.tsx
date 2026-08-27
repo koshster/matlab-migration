@@ -10,6 +10,7 @@ export default function StudentAuthPage() {
   const navigate = useNavigate()
   const setSession = useSetSession()
   const [tab, setTab] = useState<Tab>('login')
+  const [registeredPid, setRegisteredPid] = useState<string | null>(null)
 
   const loginMutation = useStudentLogin()
   const registerMutation = useStudentRegister()
@@ -60,9 +61,10 @@ export default function StudentAuthPage() {
       password: registerFields.password,
     }
     registerMutation.mutate(body, {
-      onSuccess: (data) => {
-        setSession({ studentId: data.student.id, firstName: data.student.firstName, lastName: data.student.lastName })
-        navigate('/student/dashboard')
+      onSuccess: () => {
+        setRegisteredPid(body.pid)
+        setRegisterFields({ pid: '', firstName: '', lastName: '', password: '', confirmPassword: '' })
+        setTab('login')
       },
     })
   }
@@ -82,7 +84,7 @@ export default function StudentAuthPage() {
             <button
               key={t}
               type="button"
-              onClick={() => { setTab(t) }}
+              onClick={() => { setTab(t); setRegisteredPid(null) }}
               className={[
                 'flex-1 rounded-md py-1.5 text-sm font-medium transition-colors',
                 tab === t
@@ -94,6 +96,12 @@ export default function StudentAuthPage() {
             </button>
           ))}
         </div>
+
+        {tab === 'login' && registeredPid && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            Account created for <strong>{registeredPid}</strong>. Sign in to continue.
+          </div>
+        )}
 
         {tab === 'login' ? (
           <form onSubmit={handleLogin} className="flex flex-col gap-4">

@@ -128,6 +128,7 @@ def _roster_entry_out(entry: RosterEntry) -> dict[str, Any]:
         "id": str(entry.id),
         "courseId": str(entry.course_id),
         "studentId": str(entry.student_id) if entry.student_id else None,
+        "hasAccount": entry.student_id is not None,
         "pid": entry.pid,
         "email": entry.email,
         "firstName": entry.first_name,
