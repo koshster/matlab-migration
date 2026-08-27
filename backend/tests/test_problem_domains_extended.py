@@ -1,4 +1,7 @@
-"""Comprehensive tests for problem domains (Rigid Body, Beam, Truss Geometry & Supports, and Registry)."""
+"""Comprehensive tests for problem domains.
+
+Covers Rigid Body, Beam, Truss Geometry & Supports, and Registry.
+"""
 
 import numpy as np
 import pytest

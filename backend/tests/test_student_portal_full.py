@@ -22,6 +22,7 @@ from app.db.models import (
 from app.db.session import Base, get_db
 from app.main import app
 
+INSTRUCTOR_ID = uuid.uuid4()
 STUDENT_ID = uuid.uuid4()
 OTHER_STUDENT_ID = uuid.uuid4()
 
@@ -34,7 +35,12 @@ async def db_session() -> AsyncIterator[AsyncSession]:
     factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
     async with factory() as session:
-        instructor = Instructor(email="marko@ucsd.edu", password_hash="hash", name="Prof. Marko")
+        instructor = Instructor(
+            id=INSTRUCTOR_ID,
+            email="marko@ucsd.edu",
+            password_hash="hash",
+            name="Prof. Marko",
+        )
         student = Student(id=STUDENT_ID, pid="A12345678", first_name="Ada", last_name="Lovelace")
         other_student = Student(
             id=OTHER_STUDENT_ID, pid="A87654321", first_name="Charles", last_name="Babbage"
@@ -64,13 +70,13 @@ async def student_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]
 async def test_invitation_lifecycle_and_courses(
     student_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    instructor = await db_session.execute(
-        Course.__table__.select().where(Course.instructor_id != None)  # noqa: E711
+    # 1. Create courses with 2 roster entries for student
+    course1 = Course(
+        instructor_id=INSTRUCTOR_ID, code="MAE 008", term="Fall 2026", title="Statics"
     )
-    # 1. Create a course with 2 roster entries for student
-    inst = (await db_session.execute(Instructor.__table__.select())).first()
-    course1 = Course(instructor_id=inst.id, code="MAE 008", term="Fall 2026", title="Statics")
-    course2 = Course(instructor_id=inst.id, code="MAE 130", term="Fall 2026", title="Dynamics")
+    course2 = Course(
+        instructor_id=INSTRUCTOR_ID, code="MAE 130", term="Fall 2026", title="Dynamics"
+    )
     db_session.add_all([course1, course2])
     await db_session.flush()
 
@@ -98,6 +104,8 @@ async def test_invitation_lifecycle_and_courses(
     assert res_inv.status_code == 200
     inv_list = res_inv.json()
     assert len(inv_list) == 2
+    codes = {inv["course"]["code"] for inv in invitations} if (invitations := inv_list) else set()
+    assert codes == {"MAE 008", "MAE 130"}
 
     # 3. Accept first invitation
     res_accept = await student_client.post(f"/api/v1/student/invitations/{inv1.id}/accept")
@@ -121,8 +129,7 @@ async def test_invitation_lifecycle_and_courses(
 async def test_student_dashboard_assignment_targeting_and_statuses(
     student_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    inst = (await db_session.execute(Instructor.__table__.select())).first()
-    course = Course(instructor_id=inst.id, code="MAE 008", term="Fall 2026", title="Statics")
+    course = Course(instructor_id=INSTRUCTOR_ID, code="MAE 008", term="Fall 2026", title="Statics")
     db_session.add(course)
     await db_session.flush()
 

@@ -114,7 +114,6 @@ async def test_course_crud_and_staff_management(
         json={"email": "ta@ucsd.edu", "role": "ta"},
     )
     assert res_add_staff.status_code == 200
-    staff_entry_id = res_add_staff.json()["id"]
 
     # 7. List staff
     res_staff = await admin_client.get(f"/api/v1/admin/courses/{course_id}/staff")
