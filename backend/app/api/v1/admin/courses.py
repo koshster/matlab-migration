@@ -222,12 +222,16 @@ async def list_course_staff(
     """Retrieve all instructors, TAs, and readers assigned to a course."""
     await assert_course_role(db, course_id, instructor, minimum="reader")
     rows = (
-        await db.execute(
-            select(CourseInstructor)
-            .where(CourseInstructor.course_id == course_id)
-            .options(selectinload(CourseInstructor.instructor))
+        (
+            await db.execute(
+                select(CourseInstructor)
+                .where(CourseInstructor.course_id == course_id)
+                .options(selectinload(CourseInstructor.instructor))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [
         {

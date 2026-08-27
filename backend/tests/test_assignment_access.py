@@ -71,9 +71,7 @@ async def test_first_open_creates_the_work_record(db: AsyncSession) -> None:
     student, assignment = await _fixtures(db)
 
     # No StudentAssignment exists yet — this is the path that used to 500.
-    got_student, sa, got_assignment = await _get_context(
-        slug=SLUG, student_id=student.id, db=db
-    )
+    got_student, sa, got_assignment = await _get_context(slug=SLUG, student_id=student.id, db=db)
 
     assert got_student.id == student.id
     assert got_assignment.id == assignment.id
@@ -131,3 +129,24 @@ async def test_slot_resolution_is_one_based(db: AsyncSession) -> None:
         with pytest.raises(Exception) as exc:
             _resolve_slot(assignment, bad)
         assert "404" in str(exc.value) or "out of range" in str(exc.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_unenrolled_student_can_access_unpublished_assignment_by_slug(
+    db: AsyncSession,
+) -> None:
+    """Invariant: Direct assignment routes (/assignments/{slug}/...) do NOT enforce
+    course enrollment or publication status. Any authenticated student with the slug
+    can access and work on the assignment."""
+    student, assignment = await _fixtures(db)
+    assignment.is_published = False
+    assignment.audience = "selected"  # targeted to nobody
+    await db.flush()
+
+    # Even though unpublished, audience=selected, and student has no enrollment/roster entry,
+    # context resolution succeeds.
+    got_student, sa, got_assignment = await _get_context(slug=SLUG, student_id=student.id, db=db)
+    assert got_student.id == student.id
+    assert got_assignment.id == assignment.id
+    assert got_assignment.is_published is False
+    assert sa.student_id == student.id

@@ -80,9 +80,7 @@ async def seed() -> None:
             title: str,
             due_at: datetime | None = None,
         ) -> tuple[Assignment, list[AssignmentProblem]]:
-            assignment_row = await db.execute(
-                select(Assignment).where(Assignment.slug == slug)
-            )
+            assignment_row = await db.execute(select(Assignment).where(Assignment.slug == slug))
             a = assignment_row.scalar_one_or_none()
             if a is None:
                 a = Assignment(

@@ -66,22 +66,26 @@ async def list_student_invitations(
 
     norm_pid = student.pid.strip().upper()
     invitation_entries = (
-        await db.execute(
-            select(RosterEntry)
-            .where(
-                (
-                    (RosterEntry.student_id == student_id)
-                    | (func.upper(RosterEntry.pid) == norm_pid)
-                ),
-                RosterEntry.status == "invited",
+        (
+            await db.execute(
+                select(RosterEntry)
+                .where(
+                    (
+                        (RosterEntry.student_id == student_id)
+                        | (func.upper(RosterEntry.pid) == norm_pid)
+                    ),
+                    RosterEntry.status == "invited",
+                )
+                .options(
+                    selectinload(RosterEntry.course).selectinload(Course.instructor),
+                    selectinload(RosterEntry.course).selectinload(Course.assignments),
+                )
+                .order_by(RosterEntry.invited_at.desc())
             )
-            .options(
-                selectinload(RosterEntry.course).selectinload(Course.instructor),
-                selectinload(RosterEntry.course).selectinload(Course.assignments),
-            )
-            .order_by(RosterEntry.invited_at.desc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     invitations: list[dict[str, Any]] = []
     for entry in invitation_entries:
@@ -121,10 +125,7 @@ async def accept_invitation(
         select(RosterEntry)
         .where(
             RosterEntry.id == entry_id,
-            (
-                (RosterEntry.student_id == student_id)
-                | (func.upper(RosterEntry.pid) == norm_pid)
-            ),
+            ((RosterEntry.student_id == student_id) | (func.upper(RosterEntry.pid) == norm_pid)),
         )
         .options(
             selectinload(RosterEntry.course).selectinload(Course.instructor),
@@ -133,9 +134,7 @@ async def accept_invitation(
     )
     entry = entry_row.scalar_one_or_none()
     if entry is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     now = datetime.now(UTC)
     entry.status = "active"
@@ -187,17 +186,12 @@ async def decline_invitation(
     entry_row = await db.execute(
         select(RosterEntry).where(
             RosterEntry.id == entry_id,
-            (
-                (RosterEntry.student_id == student_id)
-                | (func.upper(RosterEntry.pid) == norm_pid)
-            ),
+            ((RosterEntry.student_id == student_id) | (func.upper(RosterEntry.pid) == norm_pid)),
         )
     )
     entry = entry_row.scalar_one_or_none()
     if entry is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
     entry.status = "declined"
     db.add(entry)
@@ -217,19 +211,23 @@ async def list_student_courses(
 ) -> list[dict[str, Any]]:
     """Return all courses where the student has an active roster entry."""
     active_entries = (
-        await db.execute(
-            select(RosterEntry)
-            .where(
-                RosterEntry.student_id == student_id,
-                RosterEntry.status == "active",
+        (
+            await db.execute(
+                select(RosterEntry)
+                .where(
+                    RosterEntry.student_id == student_id,
+                    RosterEntry.status == "active",
+                )
+                .options(
+                    selectinload(RosterEntry.course).selectinload(Course.instructor),
+                    selectinload(RosterEntry.course).selectinload(Course.assignments),
+                )
+                .order_by(RosterEntry.accepted_at.desc())
             )
-            .options(
-                selectinload(RosterEntry.course).selectinload(Course.instructor),
-                selectinload(RosterEntry.course).selectinload(Course.assignments),
-            )
-            .order_by(RosterEntry.accepted_at.desc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     result: list[dict[str, Any]] = []
     seen_courses: set[uuid.UUID] = set()
@@ -240,9 +238,7 @@ async def list_student_courses(
         course = entry.course
         pub_count = sum(1 for a in course.assignments if a.is_published or a.is_active)
         result.append(
-            _student_course_summary(
-                course, pub_count, entry.accepted_at or entry.invited_at
-            )
+            _student_course_summary(course, pub_count, entry.accepted_at or entry.invited_at)
         )
     return result
 
@@ -260,13 +256,17 @@ async def list_student_assignments(
     """Return all active and published assignments for the student's enrolled courses."""
     # Find active roster entries for the student
     active_entries = (
-        await db.execute(
-            select(RosterEntry).where(
-                RosterEntry.student_id == student_id,
-                RosterEntry.status == "active",
+        (
+            await db.execute(
+                select(RosterEntry).where(
+                    RosterEntry.student_id == student_id,
+                    RosterEntry.status == "active",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     active_course_ids = [e.course_id for e in active_entries]
     active_entry_ids = {e.id for e in active_entries}
@@ -274,24 +274,32 @@ async def list_student_assignments(
     if not active_course_ids:
         # Fallback to course_enrollments if any legacy enrollments exist
         legacy_enrollments = (
-            await db.execute(
-                select(CourseEnrollment).where(
-                    CourseEnrollment.student_id == student_id,
-                    CourseEnrollment.status == "active",
+            (
+                await db.execute(
+                    select(CourseEnrollment).where(
+                        CourseEnrollment.student_id == student_id,
+                        CourseEnrollment.status == "active",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         active_course_ids = [e.course_id for e in legacy_enrollments]
 
     if not active_course_ids:
         # Check if student has direct student_assignments sessions
         sa_course_rows = (
-            await db.execute(
-                select(Assignment.course_id)
-                .join(StudentAssignment, StudentAssignment.assignment_id == Assignment.id)
-                .where(StudentAssignment.student_id == student_id)
+            (
+                await db.execute(
+                    select(Assignment.course_id)
+                    .join(StudentAssignment, StudentAssignment.assignment_id == Assignment.id)
+                    .where(StudentAssignment.student_id == student_id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         active_course_ids = list(set(sa_course_rows))
 
     if not active_course_ids:
@@ -299,29 +307,37 @@ async def list_student_assignments(
 
     # Query published assignments in active courses
     assignment_rows = (
-        await db.execute(
-            select(Assignment)
-            .where(
-                Assignment.course_id.in_(active_course_ids),
-                (Assignment.is_published.is_(True) | Assignment.is_active.is_(True)),
+        (
+            await db.execute(
+                select(Assignment)
+                .where(
+                    Assignment.course_id.in_(active_course_ids),
+                    (Assignment.is_published.is_(True) | Assignment.is_active.is_(True)),
+                )
+                .options(
+                    selectinload(Assignment.course),
+                    selectinload(Assignment.problems),
+                    selectinload(Assignment.targets),
+                )
+                .order_by(Assignment.created_at.desc())
             )
-            .options(
-                selectinload(Assignment.course),
-                selectinload(Assignment.problems),
-                selectinload(Assignment.targets),
-            )
-            .order_by(Assignment.created_at.desc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # Preload student assignments and submissions
     student_assigns = (
-        await db.execute(
-            select(StudentAssignment)
-            .where(StudentAssignment.student_id == student_id)
-            .options(selectinload(StudentAssignment.submissions))
+        (
+            await db.execute(
+                select(StudentAssignment)
+                .where(StudentAssignment.student_id == student_id)
+                .options(selectinload(StudentAssignment.submissions))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     sa_by_assign_id = {sa.assignment_id: sa for sa in student_assigns}
 
     items: list[dict[str, Any]] = []

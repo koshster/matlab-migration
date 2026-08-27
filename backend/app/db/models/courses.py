@@ -56,9 +56,7 @@ class CourseInstructor(Base):
     """Junction table associating teaching staff (instructors/TAs) to courses with roles."""
 
     __tablename__ = "course_instructors"
-    __table_args__ = (
-        UniqueConstraint("course_id", "instructor_id", name="uq_course_instructor"),
-    )
+    __table_args__ = (UniqueConstraint("course_id", "instructor_id", name="uq_course_instructor"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     course_id: Mapped[uuid.UUID] = mapped_column(

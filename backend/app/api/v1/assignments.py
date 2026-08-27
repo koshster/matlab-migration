@@ -22,6 +22,7 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 # Shared types
 # ---------------------------------------------------------------------------
 
+
 class AnswersRequest(BaseModel):
     answers: dict[str, float | None]
 
@@ -29,6 +30,7 @@ class AnswersRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _effective_seed(student_assignment: StudentAssignment, index: int) -> int:
     return student_assignment.seed + index
@@ -62,28 +64,34 @@ def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
             nodes.append({"id": int(p["id"]) + 1, "x": p["x"], "y": p["y"]})
         elif t == "member":
             member_idx += 1
-            members.append({
-                "id": member_idx,
-                "from": int(p["start_node"]) + 1,
-                "to": int(p["end_node"]) + 1,
-                "label": _member_label(member_idx),
-            })
+            members.append(
+                {
+                    "id": member_idx,
+                    "from": int(p["start_node"]) + 1,
+                    "to": int(p["end_node"]) + 1,
+                    "label": _member_label(member_idx),
+                }
+            )
         elif t in ("pin", "roller"):
-            supports.append({
-                "node": int(p["node_index"]) + 1,
-                "type": t,
-                # Pins always sit base-down; rollers carry an outward rotation.
-                "angleDeg": int(p.get("rotation", 0)),
-            })
+            supports.append(
+                {
+                    "node": int(p["node_index"]) + 1,
+                    "type": t,
+                    # Pins always sit base-down; rollers carry an outward rotation.
+                    "angleDeg": int(p.get("rotation", 0)),
+                }
+            )
         elif t == "point_load":
             fv = p["force_vector"]
             mag = (fv[0] ** 2 + fv[1] ** 2) ** 0.5
-            forces.append({
-                "node": int(p["node_index"]) + 1,
-                "fx": float(fv[0]),
-                "fy": float(fv[1]),
-                "label": f"{mag:.1f}F",
-            })
+            forces.append(
+                {
+                    "node": int(p["node_index"]) + 1,
+                    "fx": float(fv[0]),
+                    "fy": float(fv[1]),
+                    "label": f"{mag:.1f}F",
+                }
+            )
 
     if nodes:
         xs = [n["x"] for n in nodes]
@@ -242,6 +250,7 @@ def _assignment_summary(
 # Shared dependency
 # ---------------------------------------------------------------------------
 
+
 async def _get_context(
     slug: str,
     student_id: uuid.UUID = Depends(get_current_student_id),
@@ -253,9 +262,7 @@ async def _get_context(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Student not found")
 
     assignment_row = await db.execute(
-        select(Assignment)
-        .where(Assignment.slug == slug)
-        .options(selectinload(Assignment.problems))
+        select(Assignment).where(Assignment.slug == slug).options(selectinload(Assignment.problems))
     )
     assignment = assignment_row.scalar_one_or_none()
     if not assignment:
@@ -285,15 +292,14 @@ async def _get_context(
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{slug}")
 async def get_assignment(
     ctx: tuple[Student, StudentAssignment, Assignment] = Depends(_get_context),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     _, sa, assignment = ctx
-    result = await db.execute(
-        select(Submission).where(Submission.student_assignment_id == sa.id)
-    )
+    result = await db.execute(select(Submission).where(Submission.student_assignment_id == sa.id))
     all_subs = list(result.scalars().all())
     subs_by_problem: dict[uuid.UUID, list[Submission]] = {}
     for s in all_subs:
@@ -444,6 +450,13 @@ async def check_answers(
         )
     )
     existing_subs = list(result.scalars().all())
+
+    if assignment.max_attempts is not None and len(existing_subs) >= assignment.max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You have exceeded the maximum number of attempts.",
+        )
+
     attempt_number = len(existing_subs) + 1
 
     submission = Submission(
@@ -489,9 +502,7 @@ async def submit_assignment(
 ) -> dict[str, Any]:
     _, sa, assignment = ctx
 
-    result = await db.execute(
-        select(Submission).where(Submission.student_assignment_id == sa.id)
-    )
+    result = await db.execute(select(Submission).where(Submission.student_assignment_id == sa.id))
     all_subs = list(result.scalars().all())
 
     if sa.submitted_at:
@@ -504,9 +515,7 @@ async def submit_assignment(
         subs_by_problem.setdefault(s.assignment_problem_id, []).append(s)
 
     earned = sum(
-        1
-        for ap in problems_sorted
-        if any(s.is_passed for s in subs_by_problem.get(ap.id, []))
+        1 for ap in problems_sorted if any(s.is_passed for s in subs_by_problem.get(ap.id, []))
     )
     sa.final_score = float(earned)
     db.add(sa)
@@ -523,9 +532,7 @@ async def get_result(
     if not sa.submitted_at:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not submitted yet")
 
-    result = await db.execute(
-        select(Submission).where(Submission.student_assignment_id == sa.id)
-    )
+    result = await db.execute(select(Submission).where(Submission.student_assignment_id == sa.id))
     all_subs = list(result.scalars().all())
     return _build_submission_result(sa, assignment, all_subs)
 

@@ -42,23 +42,25 @@ async def list_problem_types(
     result: list[dict[str, Any]] = []
     for p_type in problem_registry.list_types():
         gen = problem_registry.get(p_type)
-        result.append({
-            "problemType": gen.problem_type,
-            "displayName": gen.display_name,
-            "paramsSchema": [
-                {
-                    "name": s.name,
-                    "label": s.label,
-                    "type": s.value_type,
-                    "default": s.default,
-                    "minimum": s.minimum,
-                    "maximum": s.maximum,
-                    "step": s.step,
-                    "helpText": s.help_text,
-                }
-                for s in gen.params_schema
-            ],
-        })
+        result.append(
+            {
+                "problemType": gen.problem_type,
+                "displayName": gen.display_name,
+                "paramsSchema": [
+                    {
+                        "name": s.name,
+                        "label": s.label,
+                        "type": s.value_type,
+                        "default": s.default,
+                        "minimum": s.minimum,
+                        "maximum": s.maximum,
+                        "step": s.step,
+                        "helpText": s.help_text,
+                    }
+                    for s in gen.params_schema
+                ],
+            }
+        )
     return result
 
 
@@ -71,13 +73,17 @@ async def list_course_assignments(
     """Retrieve all assignments (published and draft) for a course section."""
     await assert_course_role(db, course_id, instructor, minimum="reader")
     assignments = (
-        await db.execute(
-            select(Assignment)
-            .where(Assignment.course_id == course_id)
-            .options(selectinload(Assignment.problems))
-            .order_by(Assignment.created_at.desc())
+        (
+            await db.execute(
+                select(Assignment)
+                .where(Assignment.course_id == course_id)
+                .options(selectinload(Assignment.problems))
+                .order_by(Assignment.created_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [_admin_assignment_summary(a) for a in assignments]
 
@@ -96,9 +102,7 @@ async def create_assignment(
     """Create a new homework assignment with problem slots and targeting."""
     await assert_course_role(db, course_id, instructor, minimum="ta")
 
-    course = (
-        await db.execute(select(Course).where(Course.id == course_id))
-    ).scalar_one_or_none()
+    course = (await db.execute(select(Course).where(Course.id == course_id))).scalar_one_or_none()
     if course is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
 
@@ -266,6 +270,7 @@ async def update_assignment(
 
     if body.targetEntryIds is not None:
         assignment.targets.clear()
+        await db.flush()
         for entry_id_str in body.targetEntryIds:
             try:
                 e_uuid = uuid.UUID(entry_id_str)
@@ -280,6 +285,7 @@ async def update_assignment(
 
     if body.problems is not None:
         assignment.problems.clear()
+        await db.flush()
         for idx, slot_spec in enumerate(body.problems):
             assignment.problems.append(
                 AssignmentProblem(

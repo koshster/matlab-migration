@@ -36,9 +36,7 @@ async def require_instructor(
     row = await db.execute(select(Instructor).where(Instructor.id == instructor_id))
     instructor = row.scalar_one_or_none()
     if instructor is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return instructor
 
 

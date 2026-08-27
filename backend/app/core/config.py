@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     @property
     def is_development(self) -> bool:
-        return self.environment == "development"
+        return self.environment in ("development", "test")
 
     @property
     def session_cookie_secure(self) -> bool:

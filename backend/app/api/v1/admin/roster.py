@@ -33,12 +33,16 @@ async def list_roster(
     """Retrieve full roster of enrolled and invited students for a course."""
     await assert_course_role(db, course_id, instructor, minimum="reader")
     entries = (
-        await db.execute(
-            select(RosterEntry)
-            .where(RosterEntry.course_id == course_id)
-            .order_by(RosterEntry.invited_at.asc())
+        (
+            await db.execute(
+                select(RosterEntry)
+                .where(RosterEntry.course_id == course_id)
+                .order_by(RosterEntry.invited_at.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [_roster_entry_out(e) for e in entries]
 
@@ -55,8 +59,10 @@ async def add_roster_entries(
 
     # Load existing roster entries to detect collisions
     existing_entries = (
-        await db.execute(select(RosterEntry).where(RosterEntry.course_id == course_id))
-    ).scalars().all()
+        (await db.execute(select(RosterEntry).where(RosterEntry.course_id == course_id)))
+        .scalars()
+        .all()
+    )
 
     existing_pids = {e.pid for e in existing_entries if e.pid}
     existing_emails = {e.email for e in existing_entries if e.email}
@@ -83,36 +89,42 @@ async def add_roster_entries(
         # Validate entry
         if not pid and not email:
             invalid_count += 1
-            row_results.append({
-                "row": row_idx,
-                "outcome": "invalid",
-                "pid": pid,
-                "email": email,
-                "message": "At least one of PID or email must be provided",
-            })
+            row_results.append(
+                {
+                    "row": row_idx,
+                    "outcome": "invalid",
+                    "pid": pid,
+                    "email": email,
+                    "message": "At least one of PID or email must be provided",
+                }
+            )
             continue
 
         if email and not looks_like_email(email):
             invalid_count += 1
-            row_results.append({
-                "row": row_idx,
-                "outcome": "invalid",
-                "pid": pid,
-                "email": email,
-                "message": "Malformed email address",
-            })
+            row_results.append(
+                {
+                    "row": row_idx,
+                    "outcome": "invalid",
+                    "pid": pid,
+                    "email": email,
+                    "message": "Malformed email address",
+                }
+            )
             continue
 
         # Check duplicate
         if (pid and pid in existing_pids) or (email and email in existing_emails):
             already_present_count += 1
-            row_results.append({
-                "row": row_idx,
-                "outcome": "already_present",
-                "pid": pid,
-                "email": email,
-                "message": None,
-            })
+            row_results.append(
+                {
+                    "row": row_idx,
+                    "outcome": "already_present",
+                    "pid": pid,
+                    "email": email,
+                    "message": None,
+                }
+            )
             continue
 
         # Check if student account already exists
@@ -142,13 +154,15 @@ async def add_roster_entries(
         if email:
             existing_emails.add(email)
 
-        row_results.append({
-            "row": row_idx,
-            "outcome": outcome,
-            "pid": pid,
-            "email": email,
-            "message": None,
-        })
+        row_results.append(
+            {
+                "row": row_idx,
+                "outcome": outcome,
+                "pid": pid,
+                "email": email,
+                "message": None,
+            }
+        )
 
     await db.commit()
 

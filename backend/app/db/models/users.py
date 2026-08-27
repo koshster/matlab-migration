@@ -42,9 +42,7 @@ class Student(Base):
     student_assignments: Mapped[list["StudentAssignment"]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
-    roster_entries: Mapped[list["RosterEntry"]] = relationship(
-        back_populates="student"
-    )
+    roster_entries: Mapped[list["RosterEntry"]] = relationship(back_populates="student")
 
 
 class Instructor(Base):

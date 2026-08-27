@@ -62,10 +62,12 @@ def _generate_determinate_strip(
         for i in range(n_top):
             top_y[i] += int(round(1.0 - abs(i - mid) / (mid + 0.5)))
 
-    nodes = np.vstack([
-        np.column_stack([bottom_x, bottom_y]),
-        np.column_stack([top_x, top_y]),
-    ]).astype(float)
+    nodes = np.vstack(
+        [
+            np.column_stack([bottom_x, bottom_y]),
+            np.column_stack([top_x, top_y]),
+        ]
+    ).astype(float)
 
     # Random reflections
     if rng.random() > 0.5:
