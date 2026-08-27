@@ -71,9 +71,7 @@ async def test_invitation_lifecycle_and_courses(
     student_client: AsyncClient, db_session: AsyncSession
 ) -> None:
     # 1. Create courses with 2 roster entries for student
-    course1 = Course(
-        instructor_id=INSTRUCTOR_ID, code="MAE 008", term="Fall 2026", title="Statics"
-    )
+    course1 = Course(instructor_id=INSTRUCTOR_ID, code="MAE 008", term="Fall 2026", title="Statics")
     course2 = Course(
         instructor_id=INSTRUCTOR_ID, code="MAE 130", term="Fall 2026", title="Dynamics"
     )

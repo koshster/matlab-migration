@@ -145,11 +145,8 @@ async def test_unenrolled_student_can_access_unpublished_assignment_by_slug(
 
     # Even though unpublished, audience=selected, and student has no enrollment/roster entry,
     # context resolution succeeds.
-    got_student, sa, got_assignment = await _get_context(
-        slug=SLUG, student_id=student.id, db=db
-    )
+    got_student, sa, got_assignment = await _get_context(slug=SLUG, student_id=student.id, db=db)
     assert got_student.id == student.id
     assert got_assignment.id == assignment.id
     assert got_assignment.is_published is False
     assert sa.student_id == student.id
-
