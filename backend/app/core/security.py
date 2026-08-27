@@ -30,6 +30,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 # Tokens
 # ---------------------------------------------------------------------------
 
+
 def create_token(subject_id: uuid.UUID, token_type: TokenType) -> str:
     """Mint a session token carrying an explicit audience.
 
@@ -82,6 +83,7 @@ def _decode(token: str, expected_type: TokenType) -> uuid.UUID:
 # Cookies
 # ---------------------------------------------------------------------------
 
+
 def _set_session_cookie(response: Response, name: str, value: str) -> None:
     response.set_cookie(
         key=name,
@@ -113,6 +115,7 @@ def clear_instructor_cookie(response: Response) -> None:
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
+
 
 def get_current_student_id(
     student_session: str | None = Cookie(default=None, alias=STUDENT_COOKIE),

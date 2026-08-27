@@ -2,10 +2,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    database_url: str = ""
-    secret_key: str = ""
+    database_url: str = "sqlite+aiosqlite:///:memory:"
+    secret_key: str = "dev-secret-change-in-production"
     environment: str = "development"
     log_level: str = "INFO"
 
@@ -19,7 +23,7 @@ class Settings(BaseSettings):
 
     @property
     def is_development(self) -> bool:
-        return self.environment == "development"
+        return self.environment in ("development", "test")
 
     @property
     def session_cookie_secure(self) -> bool:

@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+
 import pytest
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -19,7 +21,7 @@ from app.db.session import Base
 
 
 @pytest.fixture
-async def async_test_session():
+async def async_test_session() -> AsyncIterator[AsyncSession]:
     """Provides an isolated in-memory SQLite async database session for testing."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:

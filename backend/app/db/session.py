@@ -9,8 +9,10 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
+db_url = settings.database_url if settings.database_url else "sqlite+aiosqlite:///:memory:"
+
 engine = create_async_engine(
-    settings.database_url,
+    db_url,
     echo=settings.environment == "development",
     future=True,
 )

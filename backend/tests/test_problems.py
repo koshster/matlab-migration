@@ -81,8 +81,8 @@ def test_force_and_supports_do_not_overlap() -> None:
 
 def test_simple_truss_determinacy_formula() -> None:
     """Verify that all generated trusses satisfy the planar determinacy relation m = 2n - 3."""
-    for num_nodes in [3, 4, 5, 6]:
-        for seed in [10, 20, 30, 40, 50]:
+    for num_nodes in [3, 4, 5, 6, 7, 8]:
+        for seed in [1, 2, 3, 5, 10, 20, 30, 40, 50, 99]:
             display_data = truss_generator.generate(seed, params={"num_nodes": num_nodes})
             node_count = sum(1 for el in display_data.visual_schema if el.element_type == "node")
             member_count = sum(

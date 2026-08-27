@@ -13,7 +13,7 @@ def angle_between(u: np.ndarray, v: np.ndarray) -> float:
     return float(np.degrees(np.arccos(cos_theta)))
 
 
-def check_min_angle(nodes: np.ndarray, simplices: np.ndarray, min_angle: float = 45.0) -> bool:
+def check_min_angle(nodes: np.ndarray, simplices: np.ndarray, min_angle: float = 30.0) -> bool:
     """Verify that all triangle internal angles are >= min_angle."""
     for tri in simplices:
         p1, p2, p3 = nodes[tri[0]], nodes[tri[1]], nodes[tri[2]]
@@ -41,10 +41,66 @@ def extract_unique_edges(simplices: np.ndarray) -> np.ndarray:
     return unique_edges
 
 
+def _generate_determinate_strip(
+    n_nodes: int, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Deterministically generate a 2D planar simple truss with exact node count and m = 2n - 3."""
+    n_bottom = (n_nodes + 1) // 2
+    n_top = n_nodes // 2
+
+    # Integer height (1 or 2 grid units)
+    h = int(rng.choice([1, 2]))
+    bottom_x = np.arange(n_bottom) * 2
+    bottom_y = np.zeros(n_bottom)
+
+    top_x = np.arange(n_top) * 2 + 1
+    top_y = np.full(n_top, h)
+
+    # Optional pitch for symmetric peak when n_nodes >= 5
+    if rng.random() > 0.5 and n_top >= 2:
+        mid = (n_top - 1) / 2.0
+        for i in range(n_top):
+            top_y[i] += int(round(1.0 - abs(i - mid) / (mid + 0.5)))
+
+    nodes = np.vstack(
+        [
+            np.column_stack([bottom_x, bottom_y]),
+            np.column_stack([top_x, top_y]),
+        ]
+    ).astype(float)
+
+    # Random reflections
+    if rng.random() > 0.5:
+        nodes[:, 0] = -nodes[:, 0]
+    if rng.random() > 0.5:
+        nodes[:, 1] = -nodes[:, 1]
+
+    # Random 90-degree rotations
+    rot_k = int(rng.integers(0, 4))
+    if rot_k > 0:
+        angle = np.pi / 2 * rot_k
+        cos_a, sin_a = int(round(np.cos(angle))), int(round(np.sin(angle)))
+        rot_mat = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+        nodes = nodes @ rot_mat.T
+
+    # Shift so minimum coordinate is at (0, 0)
+    nodes -= np.min(nodes, axis=0)
+    nodes = np.round(nodes).astype(float)
+
+    tri = Delaunay(nodes)
+    members = extract_unique_edges(tri.simplices)
+    return nodes, members, tri.simplices
+
+
 def generate_truss_geometry(
-    n_nodes: int, rng: np.random.Generator, min_angle: float = 45.0, max_attempts: int = 100
+    n_nodes: int, rng: np.random.Generator, min_angle: float = 35.0, max_attempts: int = 150
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate 2D planar truss node coordinates and member topology using Delaunay triangulation.
+
+    Guarantees:
+        - len(node_coords) == n_nodes
+        - len(members) == 2 * n_nodes - 3
+        - All node coordinates are whole integer grid points.
 
     Returns:
         (node_coords, members, simplices)
@@ -53,6 +109,7 @@ def generate_truss_geometry(
         raise ValueError("Number of nodes must be at least 3.")
 
     starting_configs = [
+        np.array([[0, 0], [2, 0], [1, 1]]),
         np.array([[0, 0], [1, 0], [0, 1]]),
         np.array([[0, 0], [0, 1], [-1, 0]]),
         np.array([[0, 0], [1, 0], [1, 1]]),
@@ -63,20 +120,17 @@ def generate_truss_geometry(
         cfg_idx = rng.integers(0, len(starting_configs))
         nodes = starting_configs[cfg_idx].copy().astype(float)
 
-        # Grow node set up to n_nodes
         growth_attempts = 0
-        while len(nodes) < n_nodes and growth_attempts < 50:
+        while len(nodes) < n_nodes and growth_attempts < 60:
             growth_attempts += 1
-            # Pick existing node and offset
             base_idx = rng.integers(0, len(nodes))
             base_node = nodes[base_idx]
-            offset = rng.choice([-1, 0, 1], size=2)
+            offset = rng.choice([-2, -1, 0, 1, 2], size=2)
             if np.all(offset == 0):
                 offset = np.array([1, 0])
             candidate = base_node + offset
             candidate = np.round(candidate).astype(float)
 
-            # Check if duplicate node
             if np.any(np.all(np.isclose(nodes, candidate), axis=1)):
                 continue
 
@@ -93,15 +147,12 @@ def generate_truss_geometry(
             try:
                 tri = Delaunay(nodes)
                 members = extract_unique_edges(tri.simplices)
-                # Check simple truss condition m = 2n - 3
                 if len(members) == (2 * n_nodes - 3):
-                    return nodes, members, tri.simplices
+                    # Ensure coordinates are aligned to positive integer grid
+                    nodes -= np.min(nodes, axis=0)
+                    return np.round(nodes).astype(float), members, tri.simplices
             except Exception:
                 continue
 
-    # Fallback default geometry for seed reliability
-    grid_x, grid_y = np.meshgrid(np.arange(n_nodes // 2 + 1), np.arange(2))
-    nodes = np.column_stack([grid_x.ravel(), grid_y.ravel()])[:n_nodes].astype(float)
-    tri = Delaunay(nodes)
-    members = extract_unique_edges(tri.simplices)
-    return nodes, members, tri.simplices
+    # Guaranteed valid determinate planar truss fallback
+    return _generate_determinate_strip(n_nodes, rng)

@@ -51,8 +51,9 @@ def test_stored_params_override_the_hardcoded_schedule() -> None:
 
 def test_empty_params_fall_back_to_the_legacy_schedule() -> None:
     """Slots created before the params column was honoured must keep working."""
+    stored_options: list[dict[str, object] | None] = [{}, None]
     for index, expected_nodes in enumerate(LEGACY_NODE_SCHEDULE, start=1):
-        for stored in ({}, None):
+        for stored in stored_options:
             ap = _slot(order_index=index - 1, params=stored)
             params = _generator_params(ap, index=index)
             assert params == {"problem_id": index}

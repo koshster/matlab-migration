@@ -7,6 +7,12 @@ __pycache__/
 .ruff_cache/
 dist/
 .pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+uv.lock
+backend/uv.lock
 
 # Node
 node_modules/

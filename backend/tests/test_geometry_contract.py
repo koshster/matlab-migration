@@ -132,7 +132,7 @@ def test_roller_angle_is_carried_through() -> None:
 def test_live_geometry_shape_matches_msw_fixtures(fixture_name: str) -> None:
     """MSW serves these fixtures in dev; if their shape diverges from what the
     backend emits, the app behaves differently against mocks than production."""
-    fixture = json.loads((FIXTURE_DIR / fixture_name).read_text())
+    fixture = json.loads((FIXTURE_DIR / fixture_name).read_text(encoding="utf-8"))
     fixture_geometry = fixture["geometry"]
 
     g = _geometry(seed=5, num_nodes=4)

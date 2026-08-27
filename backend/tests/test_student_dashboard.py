@@ -110,9 +110,7 @@ async def test_assignments_from_different_courses_are_distinguishable(
 
     assert by_slug["truss-fall-2026"]["course"]["code"] == "MAE-008"
     assert by_slug["beam-hw1"]["course"]["code"] == "MAE-130"
-    assert (
-        by_slug["truss-fall-2026"]["course"]["id"] != by_slug["beam-hw1"]["course"]["id"]
-    )
+    assert by_slug["truss-fall-2026"]["course"]["id"] != by_slug["beam-hw1"]["course"]["id"]
 
 
 @pytest.mark.asyncio
