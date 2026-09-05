@@ -728,6 +728,48 @@ paths:
         "404":
           description: No such assignment or problem index
 
+  /api/v1/admin/assignments/{assignmentId}/gradebook:
+    get:
+      operationId: getAssignmentGradebook
+      summary: Every targeted student's score and per-problem status
+      description: >
+        Instructor-only. Available at any time, including while the assignment
+        is still open, so staff can watch progress live. Students who never
+        opened the assignment appear with status `not_started`.
+      tags: [admin-grades]
+      parameters:
+        - $ref: "#/components/parameters/assignmentId"
+      responses:
+        "200":
+          description: Gradebook
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GradebookResponse"
+        "404":
+          description: No such assignment
+
+  /api/v1/admin/assignments/{assignmentId}/analytics:
+    get:
+      operationId: getAssignmentAnalytics
+      summary: Summary statistics for an assignment
+      description: >
+        Instructor-only. Score distribution, completion counts, and per-problem
+        success rates. Non-gradeable problem types are excluded from the
+        per-problem denominators.
+      tags: [admin-grades]
+      parameters:
+        - $ref: "#/components/parameters/assignmentId"
+      responses:
+        "200":
+          description: Analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentAnalytics"
+        "404":
+          description: No such assignment
+
   # ---------------------------------------------------------------------------
   # Admin — course staff
   # ---------------------------------------------------------------------------
@@ -1229,7 +1271,8 @@ components:
       type: object
       required:
         [id, courseId, slug, title, isPublished, audience, problemCount,
-         targetedStudentCount, dueAt, opensAt]
+         targetedStudentCount, dueAt, opensAt, hardDeadlineAt, allowLate,
+         latePenaltyRate, revealSolutionsAfterClose]
       properties:
         id:
           type: string
@@ -1257,6 +1300,20 @@ components:
           type: string
           format: date-time
           nullable: true
+        hardDeadlineAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Absolute cutoff; only meaningful when allowLate is true
+        allowLate:
+          type: boolean
+        latePenaltyRate:
+          type: number
+        revealSolutionsAfterClose:
+          type: boolean
+          description: >
+            When true, students may see reference solutions once the assignment
+            has closed. Default false — solutions never leave the backend.
 
     AdminAssignmentDetail:
       allOf:
@@ -1286,6 +1343,171 @@ components:
                 type: string
                 format: uuid
 
+    GradebookResponse:
+      type: object
+      required: [assignmentId, slug, title, totalPoints, closesAt, problems, rows]
+      properties:
+        assignmentId:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        totalPoints:
+          type: number
+        closesAt:
+          type: string
+          format: date-time
+          nullable: true
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/GradebookProblemColumn"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/GradebookRow"
+
+    GradebookProblemColumn:
+      type: object
+      required: [index, problemType, points, gradeable]
+      properties:
+        index:
+          type: integer
+        problemType:
+          type: string
+        points:
+          type: number
+        gradeable:
+          type: boolean
+          description: False for problem types with no server-side solver yet
+
+    GradebookRow:
+      type: object
+      required:
+        [studentId, displayName, externalId, status, earned, total,
+         submittedAt, lastActivityAt, problems]
+      properties:
+        studentId:
+          type: string
+          format: uuid
+          description: Internal UUID — never the PID
+        displayName:
+          type: string
+        externalId:
+          type: string
+          description: Course-facing student identifier
+        status:
+          type: string
+          enum: [not_started, in_progress, submitted, closed]
+        earned:
+          type: number
+          nullable: true
+          description: null until the assignment closes for this student
+        total:
+          type: number
+        submittedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set only when the student pressed Submit
+        lastActivityAt:
+          type: string
+          format: date-time
+          nullable: true
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/GradebookCell"
+
+    GradebookCell:
+      type: object
+      required: [index, status, attemptCount]
+      properties:
+        index:
+          type: integer
+        status:
+          type: string
+          enum: [no_attempt, incorrect, correct]
+        attemptCount:
+          type: integer
+
+    AssignmentAnalytics:
+      type: object
+      required:
+        [assignmentId, slug, title, totalPoints, closesAt, studentCount,
+         startedCount, submittedCount, closedCount, gradedCount, meanScore,
+         medianScore, minScore, maxScore, problems]
+      properties:
+        assignmentId:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        title:
+          type: string
+        totalPoints:
+          type: number
+        closesAt:
+          type: string
+          format: date-time
+          nullable: true
+        studentCount:
+          type: integer
+          description: Students the assignment targets
+        startedCount:
+          type: integer
+        submittedCount:
+          type: integer
+          description: Pressed Submit
+        closedCount:
+          type: integer
+          description: Final by submit or deadline
+        gradedCount:
+          type: integer
+          description: Rows the score statistics are computed over
+        meanScore:
+          type: number
+          nullable: true
+        medianScore:
+          type: number
+          nullable: true
+        minScore:
+          type: number
+          nullable: true
+        maxScore:
+          type: number
+          nullable: true
+        problems:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblemAnalytics"
+
+    ProblemAnalytics:
+      type: object
+      required:
+        [index, problemType, gradeable, attemptedCount, correctCount,
+         successRate, meanAttempts]
+      properties:
+        index:
+          type: integer
+        problemType:
+          type: string
+        gradeable:
+          type: boolean
+        attemptedCount:
+          type: integer
+        correctCount:
+          type: integer
+        successRate:
+          type: number
+          nullable: true
+          description: correctCount / attemptedCount; null when nobody attempted
+        meanAttempts:
+          type: number
+          nullable: true
+
     AssignmentCreateRequest:
       type: object
       required: [title, slug]
@@ -1308,6 +1530,20 @@ components:
           type: string
           format: date-time
           nullable: true
+        hardDeadlineAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Absolute cutoff; only meaningful when allowLate is true
+        allowLate:
+          type: boolean
+        latePenaltyRate:
+          type: number
+        revealSolutionsAfterClose:
+          type: boolean
+          description: >
+            When true, students may see reference solutions once the assignment
+            has closed. Default false — solutions never leave the backend.
         tolerance:
           type: number
         feedbackMode:
@@ -1345,6 +1581,20 @@ components:
           type: string
           format: date-time
           nullable: true
+        hardDeadlineAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Absolute cutoff; only meaningful when allowLate is true
+        allowLate:
+          type: boolean
+        latePenaltyRate:
+          type: number
+        revealSolutionsAfterClose:
+          type: boolean
+          description: >
+            When true, students may see reference solutions once the assignment
+            has closed. Default false — solutions never leave the backend.
         tolerance:
           type: number
         feedbackMode:
@@ -1497,7 +1747,7 @@ components:
 
     AssignmentSummary:
       type: object
-      required: [slug, title, problemCount, status, feedbackMode, maxAttempts, dueAt, locked, problems]
+      required: [slug, title, problemCount, status, feedbackMode, maxAttempts, dueAt, locked, problems, lockReason, closesAt, revealSolutions]
       properties:
         slug:
           type: string
@@ -1507,7 +1757,10 @@ components:
           type: integer
         status:
           type: string
-          enum: [not_started, in_progress, submitted]
+          enum: [not_started, in_progress, submitted, closed]
+          description: >
+            `closed` means the deadline passed without an explicit submit; the
+            work is final and read-only but was never hand-submitted.
         feedbackMode:
           type: string
           enum: [binary, per_field]
@@ -1520,7 +1773,25 @@ components:
           nullable: true
         locked:
           type: boolean
-          description: True once submitted or past a hard close
+          description: True once submitted or past the effective close time
+        lockReason:
+          type: string
+          enum: [submitted, past_due]
+          nullable: true
+          description: Why the assignment is read-only; null while open
+        closesAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            Effective close time under the late policy. null means the
+            assignment never auto-closes.
+        revealSolutions:
+          type: boolean
+          description: >
+            True only when the assignment is closed AND the instructor enabled
+            solution reveal. Never a rule the client enforces — it only tells
+            the UI whether `correctAnswers` will be populated.
         problems:
           type: array
           items:
@@ -1537,7 +1808,7 @@ components:
 
     ProblemSummary:
       type: object
-      required: [index, status, attemptCount]
+      required: [index, status, attemptCount, locked]
       properties:
         index:
           type: integer
@@ -1546,6 +1817,9 @@ components:
           enum: [no_attempt, incorrect, correct]
         attemptCount:
           type: integer
+        locked:
+          type: boolean
+          description: True when already answered correctly or the assignment closed
 
     # -------------------------------------------------------------------------
     # Problem payload
@@ -1553,7 +1827,7 @@ components:
 
     ProblemPayload:
       type: object
-      required: [schemaVersion, index, problemType, prompt, geometry, answerSchema, savedAnswers, attemptCount, maxAttempts, locked]
+      required: [schemaVersion, index, problemType, prompt, geometry, answerSchema, savedAnswers, attemptCount, maxAttempts, locked, lockReason, correctAnswers]
       properties:
         schemaVersion:
           type: integer
@@ -1581,6 +1855,22 @@ components:
           nullable: true
         locked:
           type: boolean
+          description: >
+            True when this problem is read-only — either already answered
+            correctly, or the whole assignment closed.
+        lockReason:
+          type: string
+          enum: [correct, submitted, past_due]
+          nullable: true
+        correctAnswers:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: number
+          description: >
+            Reference solution, keyed like `savedAnswers`. Populated ONLY when
+            the assignment is closed AND the instructor enabled solution
+            reveal; null in every other case.
 
     Prompt:
       type: object

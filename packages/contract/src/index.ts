@@ -500,6 +500,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/assignments/{assignmentId}/gradebook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every targeted student's score and per-problem status
+         * @description Instructor-only. Available at any time, including while the assignment is still open, so staff can watch progress live. Students who never opened the assignment appear with status `not_started`.
+         */
+        get: operations["getAssignmentGradebook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/assignments/{assignmentId}/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summary statistics for an assignment
+         * @description Instructor-only. Score distribution, completion counts, and per-problem success rates. Non-gradeable problem types are excluded from the per-problem denominators.
+         */
+        get: operations["getAssignmentAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/courses/{courseId}/staff": {
         parameters: {
             query?: never;
@@ -728,6 +768,15 @@ export interface components {
             dueAt: string | null;
             /** Format: date-time */
             opensAt: string | null;
+            /**
+             * Format: date-time
+             * @description Absolute cutoff; only meaningful when allowLate is true
+             */
+            hardDeadlineAt: string | null;
+            allowLate: boolean;
+            latePenaltyRate: number;
+            /** @description When true, students may see reference solutions once the assignment has closed. Default false — solutions never leave the backend. */
+            revealSolutionsAfterClose: boolean;
         };
         AdminAssignmentDetail: components["schemas"]["AdminAssignmentSummary"] & {
             instructions: string;
@@ -739,6 +788,86 @@ export interface components {
             /** @description Roster-entry ids; only meaningful when audience is `selected` */
             targetEntryIds: string[];
         };
+        GradebookResponse: {
+            /** Format: uuid */
+            assignmentId: string;
+            slug: string;
+            title: string;
+            totalPoints: number;
+            /** Format: date-time */
+            closesAt: string | null;
+            problems: components["schemas"]["GradebookProblemColumn"][];
+            rows: components["schemas"]["GradebookRow"][];
+        };
+        GradebookProblemColumn: {
+            index: number;
+            problemType: string;
+            points: number;
+            /** @description False for problem types with no server-side solver yet */
+            gradeable: boolean;
+        };
+        GradebookRow: {
+            /**
+             * Format: uuid
+             * @description Internal UUID — never the PID
+             */
+            studentId: string;
+            displayName: string;
+            /** @description Course-facing student identifier */
+            externalId: string;
+            /** @enum {string} */
+            status: "not_started" | "in_progress" | "submitted" | "closed";
+            /** @description null until the assignment closes for this student */
+            earned: number | null;
+            total: number;
+            /**
+             * Format: date-time
+             * @description Set only when the student pressed Submit
+             */
+            submittedAt: string | null;
+            /** Format: date-time */
+            lastActivityAt: string | null;
+            problems: components["schemas"]["GradebookCell"][];
+        };
+        GradebookCell: {
+            index: number;
+            /** @enum {string} */
+            status: "no_attempt" | "incorrect" | "correct";
+            attemptCount: number;
+        };
+        AssignmentAnalytics: {
+            /** Format: uuid */
+            assignmentId: string;
+            slug: string;
+            title: string;
+            totalPoints: number;
+            /** Format: date-time */
+            closesAt: string | null;
+            /** @description Students the assignment targets */
+            studentCount: number;
+            startedCount: number;
+            /** @description Pressed Submit */
+            submittedCount: number;
+            /** @description Final by submit or deadline */
+            closedCount: number;
+            /** @description Rows the score statistics are computed over */
+            gradedCount: number;
+            meanScore: number | null;
+            medianScore: number | null;
+            minScore: number | null;
+            maxScore: number | null;
+            problems: components["schemas"]["ProblemAnalytics"][];
+        };
+        ProblemAnalytics: {
+            index: number;
+            problemType: string;
+            gradeable: boolean;
+            attemptedCount: number;
+            correctCount: number;
+            /** @description correctCount / attemptedCount; null when nobody attempted */
+            successRate: number | null;
+            meanAttempts: number | null;
+        };
         AssignmentCreateRequest: {
             title: string;
             slug: string;
@@ -747,6 +876,15 @@ export interface components {
             dueAt?: string | null;
             /** Format: date-time */
             opensAt?: string | null;
+            /**
+             * Format: date-time
+             * @description Absolute cutoff; only meaningful when allowLate is true
+             */
+            hardDeadlineAt?: string | null;
+            allowLate?: boolean;
+            latePenaltyRate?: number;
+            /** @description When true, students may see reference solutions once the assignment has closed. Default false — solutions never leave the backend. */
+            revealSolutionsAfterClose?: boolean;
             tolerance?: number;
             feedbackMode?: components["schemas"]["FeedbackMode"];
             maxAttempts?: number | null;
@@ -763,6 +901,15 @@ export interface components {
             dueAt?: string | null;
             /** Format: date-time */
             opensAt?: string | null;
+            /**
+             * Format: date-time
+             * @description Absolute cutoff; only meaningful when allowLate is true
+             */
+            hardDeadlineAt?: string | null;
+            allowLate?: boolean;
+            latePenaltyRate?: number;
+            /** @description When true, students may see reference solutions once the assignment has closed. Default false — solutions never leave the backend. */
+            revealSolutionsAfterClose?: boolean;
             tolerance?: number;
             feedbackMode?: components["schemas"]["FeedbackMode"];
             maxAttempts?: number | null;
@@ -841,15 +988,30 @@ export interface components {
             slug: string;
             title: string;
             problemCount: number;
-            /** @enum {string} */
-            status: "not_started" | "in_progress" | "submitted";
+            /**
+             * @description `closed` means the deadline passed without an explicit submit; the work is final and read-only but was never hand-submitted.
+             * @enum {string}
+             */
+            status: "not_started" | "in_progress" | "submitted" | "closed";
             /** @enum {string} */
             feedbackMode: "binary" | "per_field";
             maxAttempts: number | null;
             /** Format: date-time */
             dueAt: string | null;
-            /** @description True once submitted or past a hard close */
+            /** @description True once submitted or past the effective close time */
             locked: boolean;
+            /**
+             * @description Why the assignment is read-only; null while open
+             * @enum {string|null}
+             */
+            lockReason: "submitted" | "past_due" | null;
+            /**
+             * Format: date-time
+             * @description Effective close time under the late policy. null means the assignment never auto-closes.
+             */
+            closesAt: string | null;
+            /** @description True only when the assignment is closed AND the instructor enabled solution reveal. Never a rule the client enforces — it only tells the UI whether `correctAnswers` will be populated. */
+            revealSolutions: boolean;
             problems: components["schemas"]["ProblemSummary"][];
             score?: {
                 earned: number;
@@ -861,6 +1023,8 @@ export interface components {
             /** @enum {string} */
             status: "no_attempt" | "incorrect" | "correct";
             attemptCount: number;
+            /** @description True when already answered correctly or the assignment closed */
+            locked: boolean;
         };
         ProblemPayload: {
             /** @enum {integer} */
@@ -877,7 +1041,14 @@ export interface components {
             };
             attemptCount: number;
             maxAttempts: number | null;
+            /** @description True when this problem is read-only — either already answered correctly, or the whole assignment closed. */
             locked: boolean;
+            /** @enum {string|null} */
+            lockReason: "correct" | "submitted" | "past_due" | null;
+            /** @description Reference solution, keyed like `savedAnswers`. Populated ONLY when the assignment is closed AND the instructor enabled solution reveal; null in every other case. */
+            correctAnswers: {
+                [key: string]: number;
+            } | null;
         };
         Prompt: {
             title: string;
@@ -2080,6 +2251,66 @@ export interface operations {
                 };
             };
             /** @description No such assignment or problem index */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAssignmentGradebook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal assignment UUID */
+                assignmentId: components["parameters"]["assignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Gradebook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradebookResponse"];
+                };
+            };
+            /** @description No such assignment */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAssignmentAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Internal assignment UUID */
+                assignmentId: components["parameters"]["assignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analytics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentAnalytics"];
+                };
+            };
+            /** @description No such assignment */
             404: {
                 headers: {
                     [name: string]: unknown;
