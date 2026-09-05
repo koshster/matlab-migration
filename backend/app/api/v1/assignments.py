@@ -14,6 +14,7 @@ import app.problems  # noqa: F401 — triggers registry registration
 from app.core.security import get_current_student_id
 from app.db.models import Assignment, AssignmentProblem, Student, StudentAssignment, Submission
 from app.db.session import get_db
+from app.problems.base import AnswerSubmission
 from app.problems.registry import problem_registry
 from app.services.access import (
     AccessState,
@@ -47,12 +48,12 @@ def _effective_seed(student_assignment: StudentAssignment, index: int) -> int:
     return student_assignment.seed + index
 
 
-# Problem types with a real server-side solver. `beam` and `rigid_body` are
-# registered so the assignment builder can list them, but their solve() returns
-# no solution -- previously that made every answer grade as wrong forever, and
-# an empty geometry would have graded as vacuously correct. Anything not in
-# this set is displayable but explicitly not gradeable.
-GRADEABLE_TYPES: frozenset[str] = frozenset({"truss"})
+# Problem types with a real server-side solver. `beam` is registered so the
+# assignment builder can list it, but its solve() is still a stub returning no
+# solution -- that would make every answer grade as wrong forever, and an empty
+# geometry would grade as vacuously correct. Anything not in this set is
+# displayable but explicitly not gradeable.
+GRADEABLE_TYPES: frozenset[str] = frozenset({"truss", "rigid_body"})
 
 
 def is_gradeable(problem_type: str) -> bool:
@@ -135,6 +136,35 @@ def _solution_answers(
         places = (decimals_by_key or {}).get(key)
         value = float(truth["member_solutions"][keys[i]]["signed_force"])
         out[key] = round(value, places if places is not None else 2) + 0.0
+    return out
+
+
+def _generic_solution_answers(
+    generator: Any,
+    seed: int,
+    params: dict[str, Any],
+    field_keys: list[str],
+    decimals_by_key: dict[str, int | None] | None = None,
+) -> dict[str, float]:
+    """Reveal answers for a non-truss domain, keyed like the student's fields.
+
+    Same second wall as `_solution_answers`: `solve()` returns a whole
+    ground-truth blob (rigid_body ships `supports` alongside `reactions`), so
+    this projects it down to exactly the field keys the student was shown and
+    drops everything else. A solver that starts returning extra internals
+    cannot leak them through here.
+    """
+    truth = generator.solve(seed=seed, params=params)
+    reactions = truth.get("reactions") or {}
+    out: dict[str, float] = {}
+    for key in field_keys:
+        # Generators accept the bare key as an alias for the prefixed one when
+        # grading, so honour the same aliasing when revealing.
+        raw = reactions.get(key, reactions.get(key.removeprefix("reaction_")))
+        if raw is None:
+            continue
+        places = (decimals_by_key or {}).get(key)
+        out[key] = round(float(raw), places if places is not None else 2) + 0.0
     return out
 
 
@@ -240,6 +270,49 @@ def _build_answer_schema(members: list[dict[str, Any]]) -> dict[str, Any]:
         for m in members
     ]
     return {"groups": [{"id": "member-forces", "label": "Member Forces", "fields": fields}]}
+
+
+def _build_display_payload(
+    problem_type: str, display: Any
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Geometry + answer schema for one problem slot, keyed by problem type.
+
+    `truss` predates the generator-declared answer schema and still derives its
+    fields from member ids, so it keeps its bespoke path. Every other type is
+    built straight from what the generator declares, which is what lets a new
+    domain plug in without touching this router.
+
+    `type` is pinned to the contract's `number` enum rather than passed through
+    from `AnswerFieldSpec.value_type` -- the generators say `"numeric"`, which
+    is not a value the contract (or the generated TS client) accepts.
+    """
+    if problem_type == "truss":
+        geometry = _build_truss_geometry(display.visual_schema)
+        return geometry, _build_answer_schema(geometry["members"])
+
+    geometry = {
+        "schemaVersion": 1,
+        "elements": [el.model_dump() for el in display.visual_schema],
+    }
+    answer_schema = {
+        "groups": [
+            {
+                "id": "answers",
+                "label": "Answers",
+                "fields": [
+                    {
+                        "key": f.field_id,
+                        "label": f.label,
+                        "unit": f.unit,
+                        "type": "number",
+                        "decimals": 2,
+                    }
+                    for f in display.answer_schema
+                ],
+            }
+        ]
+    }
+    return geometry, answer_schema
 
 
 def _generator_params(ap: AssignmentProblem, index: int) -> dict[str, Any]:
@@ -511,8 +584,7 @@ async def get_problem(
             "correctAnswers": None,
         }
 
-    geometry = _build_truss_geometry(display.visual_schema)
-    answer_schema = _build_answer_schema(geometry["members"])
+    geometry, answer_schema = _build_display_payload(ap.problem_type, display)
     field_keys = [f["key"] for g in answer_schema["groups"] for f in g["fields"]]
 
     access = problem_access(state, subs)
@@ -526,9 +598,14 @@ async def get_problem(
         decimals_by_key = {
             f["key"]: f.get("decimals") for g in answer_schema["groups"] for f in g["fields"]
         }
-        correct_answers = _solution_answers(
-            generator, seed, params, geometry["members"], decimals_by_key
-        )
+        if ap.problem_type == "truss":
+            correct_answers = _solution_answers(
+                generator, seed, params, geometry["members"], decimals_by_key
+            )
+        else:
+            correct_answers = _generic_solution_answers(
+                generator, seed, params, field_keys, decimals_by_key
+            )
 
     return {
         "schemaVersion": 1,
@@ -590,18 +667,39 @@ async def check_answers(
     params = _generator_params(ap, index)
 
     display = generator.generate(seed=seed, params=params)
-    geometry = _build_truss_geometry(display.visual_schema)
-    members = geometry["members"]
 
-    # Same seed and same params as generate(), or the student would be graded
-    # against a different truss than the one they were shown.
-    ground_truth = generator.solve(seed=seed, params=params)
-    member_solutions = ground_truth["member_solutions"]
+    if ap.problem_type == "truss":
+        geometry = _build_truss_geometry(display.visual_schema)
+        members = geometry["members"]
 
-    per_field = _check_answers(body.answers, member_solutions, members, assignment.tolerance)
-    # `len(per_field) > 0` matters: with no fields, all({}) is vacuously True
-    # and the problem would grade as fully correct without an answer.
-    all_correct = len(per_field) > 0 and all(per_field.values()) and len(per_field) == len(members)
+        # Same seed and same params as generate(), or the student would be graded
+        # against a different truss than the one they were shown.
+        ground_truth = generator.solve(seed=seed, params=params)
+        member_solutions = ground_truth["member_solutions"]
+
+        per_field = _check_answers(body.answers, member_solutions, members, assignment.tolerance)
+        # `len(per_field) > 0` matters: with no fields, all({}) is vacuously True
+        # and the problem would grade as fully correct without an answer.
+        all_correct = (
+            len(per_field) > 0 and all(per_field.values()) and len(per_field) == len(members)
+        )
+        total_items = len(members)
+        item_label = "members"
+    else:
+        # Same seed and params as generate(), for the same reason as above.
+        grading = generator.check(
+            seed=seed,
+            submission=AnswerSubmission(answers=body.answers),
+            tolerance=assignment.tolerance,
+            params=params,
+        )
+        per_field = {k: r.is_correct for k, r in grading.field_results.items()}
+        # Guard again rather than trusting `grading.is_passed`: a generator with
+        # no expected fields scores 0/0, and not every domain is guaranteed to
+        # treat that as a failure.
+        all_correct = len(per_field) > 0 and grading.is_passed
+        total_items = len(per_field)
+        item_label = "fields"
 
     if assignment.max_attempts is not None and len(existing_subs) >= assignment.max_attempts:
         raise HTTPException(
@@ -635,17 +733,17 @@ async def check_answers(
 
     if all_correct:
         prob_status = "correct"
-        message = "All members correct. Great work!"
+        message = f"All {item_label} correct. Great work!"
     elif attempt_number > 1:
         wrong = sum(1 for v in per_field.values() if not v)
         message = (
-            f"{wrong} of {len(members)} members incorrect. "
+            f"{wrong} of {total_items} {item_label} incorrect. "
             "Check your signs and equilibrium equations."
         )
         prob_status = "incorrect"
     else:
         wrong = sum(1 for v in per_field.values() if not v)
-        message = f"{wrong} of {len(members)} members incorrect."
+        message = f"{wrong} of {total_items} {item_label} incorrect."
         prob_status = "incorrect"
 
     return {

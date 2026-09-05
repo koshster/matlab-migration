@@ -18,7 +18,12 @@ def test_rigid_body_generator_contract() -> None:
     gen = RigidBodyGenerator()
     assert gen.problem_type == "rigid_body"
     assert gen.display_name == "2D Rigid Body Equilibrium"
-    assert len(gen.params_schema) == 2
+    assert [p.name for p in gen.params_schema] == [
+        "support_case",
+        "num_loads",
+        "num_moments",
+        "max_force",
+    ]
 
     # Generate
     display = gen.generate(seed=42, params={"body_shape": 2, "num_loads": 3})
@@ -27,16 +32,23 @@ def test_rigid_body_generator_contract() -> None:
     assert len(display.visual_schema) > 0
     assert len(display.answer_schema) == 3
 
-    # Solve
+    # Solve. Now a real solver, so it returns reactions keyed exactly like the
+    # answer schema -- no `member_solutions`, which is a truss-only concept.
     solution = gen.solve(seed=42)
-    assert "reactions" in solution
-    assert "member_solutions" in solution
+    assert set(solution) == {"reactions", "supports"}
+    assert set(solution["reactions"]) == {f.field_id for f in display.answer_schema}
 
-    # Check
-    submission = AnswerSubmission(answers={"reaction_Ax": 0.0, "reaction_Ay": 0.0})
-    result = gen.check(seed=42, submission=submission, tolerance=0.01)
-    assert result.is_passed is True
-    assert result.score == 1.0
+    # Check: ground truth passes, and a wrong answer does not.
+    truth = gen.check(
+        seed=42,
+        submission=AnswerSubmission(answers=dict(solution["reactions"])),
+        tolerance=0.01,
+    )
+    assert truth.is_passed is True
+    assert truth.score == 1.0
+
+    wrong = {k: v + 100.0 for k, v in solution["reactions"].items()}
+    assert gen.check(seed=42, submission=AnswerSubmission(answers=wrong)).is_passed is False
 
 
 def test_beam_generator_contract() -> None:

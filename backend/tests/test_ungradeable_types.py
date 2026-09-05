@@ -1,12 +1,15 @@
 """Problem types with no server-side solver must refuse to grade, loudly.
 
-`beam` and `rigid_body` are registered so the assignment builder can offer
-them, but their solve() returns no solution. Before this guard existed, a beam
-problem was served through the truss geometry builder and every answer graded
-as wrong forever -- reproduced against the seeded `hw1` assignment, where
-`check` returned `perField: {"S1": false}` for any input. The same expression
-had a vacuous-truth sibling: with no fields at all, `all({})` is True and the
-problem graded as fully correct.
+`beam` is registered so the assignment builder can offer it, but its solve() is
+still a stub returning no solution. Before this guard existed, a beam problem
+was served through the truss geometry builder and every answer graded as wrong
+forever -- reproduced against the seeded `hw1` assignment, where `check`
+returned `perField: {"S1": false}` for any input. The same expression had a
+vacuous-truth sibling: with no fields at all, `all({})` is True and the problem
+graded as fully correct.
+
+`rigid_body` used to sit in the same bucket and now has a real solver, so it is
+gradeable; the guard is about having a solver, not about being truss.
 """
 
 import uuid
@@ -69,11 +72,12 @@ async def client() -> AsyncIterator[AsyncClient]:
     await engine.dispose()
 
 
-def test_only_truss_is_gradeable_today() -> None:
-    assert frozenset({"truss"}) == GRADEABLE_TYPES
+def test_gradeable_types_are_exactly_those_with_solvers() -> None:
+    assert frozenset({"truss", "rigid_body"}) == GRADEABLE_TYPES
     assert is_gradeable("truss") is True
+    assert is_gradeable("rigid_body") is True
     assert is_gradeable("beam") is False
-    assert is_gradeable("rigid_body") is False
+    assert is_gradeable("banana") is False
 
 
 @pytest.mark.asyncio
