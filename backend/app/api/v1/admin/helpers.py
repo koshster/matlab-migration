@@ -4,6 +4,7 @@ from typing import Any
 
 from app.db.models import Assignment, Course, RosterEntry
 from app.problems.base import VisualElementSchema
+from app.services.access import effective_close_at, isoformat_utc
 
 
 def _build_truss_geometry(visual_schema: list[VisualElementSchema]) -> dict[str, Any]:
@@ -149,9 +150,15 @@ def _admin_assignment_summary(a: Assignment) -> dict[str, Any]:
         "isPublished": a.is_published,
         "audience": a.audience,
         "problemCount": len(a.problems),
-        "opensAt": a.opens_at.isoformat() if a.opens_at else None,
-        "dueAt": a.due_at.isoformat() if a.due_at else None,
-        "hardDeadlineAt": a.hard_deadline_at.isoformat() if a.hard_deadline_at else None,
+        "opensAt": isoformat_utc(a.opens_at),
+        "dueAt": isoformat_utc(a.due_at),
+        "hardDeadlineAt": isoformat_utc(a.hard_deadline_at),
+        "allowLate": a.allow_late,
+        "latePenaltyRate": a.late_penalty_rate,
+        "revealSolutionsAfterClose": a.reveal_solutions_after_close,
+        # The instant the late policy actually closes it, so the builder does
+        # not make the instructor apply the rules in their head.
+        "effectiveCloseAt": isoformat_utc(effective_close_at(a)),
         "createdAt": a.created_at.isoformat() if a.created_at else "",
     }
 
@@ -170,8 +177,6 @@ def _admin_assignment_detail(a: Assignment) -> dict[str, Any]:
         "maxAttempts": a.max_attempts,
         "penaltyPerAttempt": a.penalty_per_attempt,
         "scoringStrategy": a.scoring_strategy,
-        "allowLate": a.allow_late,
-        "latePenaltyRate": a.late_penalty_rate,
         "isPublished": a.is_published,
         "audience": a.audience,
         "problemCount": len(problems_sorted),
@@ -185,8 +190,14 @@ def _admin_assignment_detail(a: Assignment) -> dict[str, Any]:
             }
             for p in problems_sorted
         ],
-        "opensAt": a.opens_at.isoformat() if a.opens_at else None,
-        "dueAt": a.due_at.isoformat() if a.due_at else None,
-        "hardDeadlineAt": a.hard_deadline_at.isoformat() if a.hard_deadline_at else None,
+        "opensAt": isoformat_utc(a.opens_at),
+        "dueAt": isoformat_utc(a.due_at),
+        "hardDeadlineAt": isoformat_utc(a.hard_deadline_at),
+        "allowLate": a.allow_late,
+        "latePenaltyRate": a.late_penalty_rate,
+        "revealSolutionsAfterClose": a.reveal_solutions_after_close,
+        # The instant the late policy actually closes it, so the builder does
+        # not make the instructor apply the rules in their head.
+        "effectiveCloseAt": isoformat_utc(effective_close_at(a)),
         "createdAt": a.created_at.isoformat() if a.created_at else "",
     }

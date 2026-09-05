@@ -28,6 +28,7 @@ from app.schemas.admin import (
     AssignmentCreateRequest,
     AssignmentUpdateRequest,
     PublishAssignmentRequest,
+    _assert_date_order,
 )
 from app.services.authz import assert_course_role, require_instructor
 
@@ -135,6 +136,10 @@ async def create_assignment(
         scoring_strategy=body.scoringStrategy,
         allow_late=body.allowLate,
         late_penalty_rate=body.latePenaltyRate,
+        opens_at=body.opensAt,
+        due_at=body.dueAt,
+        hard_deadline_at=body.hardDeadlineAt,
+        reveal_solutions_after_close=body.revealSolutionsAfterClose,
         is_published=False,
         audience=body.audience,
     )
@@ -265,6 +270,27 @@ async def update_assignment(
         assignment.allow_late = body.allowLate
     if body.latePenaltyRate is not None:
         assignment.late_penalty_rate = body.latePenaltyRate
+    if body.revealSolutionsAfterClose is not None:
+        assignment.reveal_solutions_after_close = body.revealSolutionsAfterClose
+
+    # Dates use model_fields_set, not an is-not-None test: an explicit null has
+    # to be able to clear a deadline, and "omitted" and "null" are different
+    # requests. The is-not-None idiom used above cannot express that.
+    for wire_name, column in (
+        ("opensAt", "opens_at"),
+        ("dueAt", "due_at"),
+        ("hardDeadlineAt", "hard_deadline_at"),
+    ):
+        if wire_name in body.model_fields_set:
+            setattr(assignment, column, getattr(body, wire_name))
+
+    # Validate against the merged row: a PATCH sending only dueAt still has to
+    # agree with the hard deadline already stored.
+    try:
+        _assert_date_order(assignment.opens_at, assignment.due_at, assignment.hard_deadline_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     if body.audience is not None:
         assignment.audience = body.audience
 
