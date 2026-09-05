@@ -106,7 +106,7 @@ async def seed() -> None:
                             problem_type="truss",
                             order_index=i,
                             points=1.0,
-                            params={"num_nodes": n, "max_force": 5, "load_count": 1},
+                            params={"num_nodes": n, "max_force": 5, "load_count": 2},
                         )
                     )
                 await db.flush()

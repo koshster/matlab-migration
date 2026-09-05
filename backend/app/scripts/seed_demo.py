@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.assignments import _build_truss_geometry, member_field_key
 from app.core.security import hash_password
 from app.db.models import (
     Assignment,
@@ -31,14 +32,13 @@ from app.db.models import (
     Submission,
 )
 from app.db.session import async_session_factory
+from app.problems.registry import problem_registry
 
 PASSWORD = "demo1234"
 
 # Problem answers are stored in submissions but not re-graded, so we use
 # placeholder values. is_passed / field_verdicts are the source of truth for
 # the UI; the raw answer dict is audit-only here.
-_CORRECT_ANSWERS = {"S1": 2.5, "S2": -1.5, "S3": 0.5}
-_WRONG_ANSWERS = {"S1": 999.0, "S2": -999.0, "S3": 0.0}
 
 
 async def _get_student(db: AsyncSession, pid: str) -> Student | None:
@@ -155,12 +155,39 @@ async def _get_or_create_sa(
     return sa, True
 
 
-def _correct_verdicts(n_members: int) -> dict[str, bool]:
-    return {f"S{i + 1}": True for i in range(n_members)}
+def _real_answers(sa_seed: int, ap: AssignmentProblem, index: int) -> dict[str, float]:
+    """The actual correct answers for the truss this student was given.
+
+    The demo used to store one hardcoded dict for every student on every
+    problem, so the whole roster appeared to have typed the same three numbers.
+    Deriving them from the solver means the gradebook, review screen and
+    per-field verdicts all show something a student could really have entered.
+    """
+    generator = problem_registry.get(ap.problem_type)
+    seed = sa_seed + ap.order_index
+    params = {"problem_id": index, **(ap.params or {})}
+    geometry = _build_truss_geometry(generator.generate(seed=seed, params=params).visual_schema)
+    truth = generator.solve(seed=seed, params=params)
+    keys = list(truth["member_solutions"].keys())
+    return {
+        member_field_key(m["id"]): round(
+            float(truth["member_solutions"][keys[i]]["signed_force"]), 2
+        )
+        + 0.0
+        for i, m in enumerate(geometry["members"])
+        if i < len(keys)
+    }
 
 
-def _wrong_verdicts(n_members: int) -> dict[str, bool]:
-    return {f"S{i + 1}": False for i in range(n_members)}
+def _plausible_wrong(answers: dict[str, float]) -> dict[str, float]:
+    """A wrong attempt that looks like a real mistake, not a sentinel.
+
+    Flipping the sign of every member is the classic tension/compression error
+    and is what a grader would actually expect to see.
+    """
+    # `+ 0.0` keeps a negated zero from becoming -0.0, which renders as
+    # "-0.00" in an input box and reads as a sign error.
+    return {key: -value + 0.0 for key, value in answers.items()}
 
 
 async def _submission(
@@ -169,18 +196,25 @@ async def _submission(
     prob_id: uuid.UUID,
     attempt: int,
     passed: bool,
-    n_members: int = 3,
+    sa_seed: int = 0,
+    ap: "AssignmentProblem | None" = None,
+    index: int = 1,
 ) -> None:
+    correct = _real_answers(sa_seed, ap, index) if ap is not None else {}
+    answers = correct if passed else _plausible_wrong(correct)
+    # A sign flip is wrong on every non-zero member; a zero-force member is
+    # still right either way, which is exactly what the real grader would say.
+    verdicts = {key: passed or abs(value) < 5e-3 for key, value in correct.items()}
     db.add(
         Submission(
             student_assignment_id=sa_id,
             assignment_problem_id=prob_id,
             attempt_number=attempt,
-            answers=_CORRECT_ANSWERS if passed else _WRONG_ANSWERS,
+            answers=answers,
             raw_score=1.0 if passed else 0.0,
             net_score=1.0 if passed else 0.0,
             is_passed=passed,
-            field_verdicts=_correct_verdicts(n_members) if passed else _wrong_verdicts(n_members),
+            field_verdicts=verdicts,
         )
     )
 
@@ -217,12 +251,48 @@ async def seed_demo() -> None:
         if created:
             # Problems 0–2: correct first try
             for i in range(3):
-                await _submission(db, sa.id, a1_probs[i].id, attempt=1, passed=True)
+                await _submission(
+                    db,
+                    sa.id,
+                    a1_probs[i].id,
+                    attempt=1,
+                    passed=True,
+                    sa_seed=sa.seed,
+                    ap=a1_probs[i],
+                    index=i + 1,
+                )
             # Problem 3: one wrong attempt, then correct
-            await _submission(db, sa.id, a1_probs[3].id, attempt=1, passed=False)
-            await _submission(db, sa.id, a1_probs[3].id, attempt=2, passed=True)
+            await _submission(
+                db,
+                sa.id,
+                a1_probs[3].id,
+                attempt=1,
+                passed=False,
+                sa_seed=sa.seed,
+                ap=a1_probs[3],
+                index=3 + 1,
+            )
+            await _submission(
+                db,
+                sa.id,
+                a1_probs[3].id,
+                attempt=2,
+                passed=True,
+                sa_seed=sa.seed,
+                ap=a1_probs[3],
+                index=3 + 1,
+            )
             # Problem 4: one wrong attempt, still incorrect
-            await _submission(db, sa.id, a1_probs[4].id, attempt=1, passed=False)
+            await _submission(
+                db,
+                sa.id,
+                a1_probs[4].id,
+                attempt=1,
+                passed=False,
+                sa_seed=sa.seed,
+                ap=a1_probs[4],
+                index=4 + 1,
+            )
             await db.flush()
             print("  Seeded Alice's submissions (3 correct, 1 wrong in progress)")
 
@@ -236,8 +306,17 @@ async def seed_demo() -> None:
 
         sa, created = await _get_or_create_sa(db, bob.id, a1.id, seed=2002)
         if created:
-            for prob in a1_probs:
-                await _submission(db, sa.id, prob.id, attempt=1, passed=True)
+            for i, prob in enumerate(a1_probs):
+                await _submission(
+                    db,
+                    sa.id,
+                    prob.id,
+                    attempt=1,
+                    passed=True,
+                    sa_seed=sa.seed,
+                    ap=prob,
+                    index=i + 1,
+                )
             sa.submitted_at = datetime(2026, 8, 25, 14, 30, tzinfo=UTC)
             sa.final_score = 8.0
             db.add(sa)
@@ -248,7 +327,16 @@ async def seed_demo() -> None:
         sa3, created3 = await _get_or_create_sa(db, bob.id, a3.id, seed=2099)
         if created3:
             for i, prob in enumerate(a3_probs):
-                await _submission(db, sa3.id, prob.id, attempt=1, passed=(i < 6))
+                await _submission(
+                    db,
+                    sa3.id,
+                    prob.id,
+                    attempt=1,
+                    passed=(i < 6),
+                    sa_seed=sa3.seed,
+                    ap=prob,
+                    index=i + 1,
+                )
             sa3.submitted_at = datetime(2026, 8, 10, 10, 0, tzinfo=UTC)
             sa3.final_score = 6.0
             db.add(sa3)

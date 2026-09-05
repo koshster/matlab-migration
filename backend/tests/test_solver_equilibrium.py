@@ -159,3 +159,50 @@ def test_global_moment_balance_about_a_non_support_point(num_nodes: int) -> None
         moment += r[0] * reactions.get("By", 0.0) - r[1] * reactions.get("Bx", 0.0)
 
     assert abs(moment) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Problem quality
+#
+# A zero-force member is valid statics, so the equilibrium tests above are
+# perfectly happy with a problem whose answer is "0, 0, 0, 0, -3, 0, 0, 0, 0".
+# Correctness and usefulness are different axes; these pin the second one.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("num_nodes", [4, 5, 6, 7, 8])
+def test_most_members_actually_carry_load(num_nodes: int) -> None:
+    """Zero-force members must stay a minority across a seed sweep.
+
+    Regression guard: with axis-aligned loads on an integer grid and a single
+    applied load, 58% of all member forces came out exactly zero.
+    """
+    gen = TrussGenerator()
+    zero = total = 0
+    for seed in range(200):
+        solution = gen.solve(seed, {"num_nodes": num_nodes})
+        for entry in solution["member_solutions"].values():
+            total += 1
+            if abs(entry["signed_force"]) < 5e-3:
+                zero += 1
+
+    ratio = zero / total
+    assert ratio < 0.35, f"{ratio:.1%} of members carry no load at n={num_nodes}"
+
+
+def test_problems_have_a_variety_of_answers() -> None:
+    """A student should not be typing the same number into most of the boxes."""
+    gen = TrussGenerator()
+    too_uniform = 0
+    trials = 200
+
+    for seed in range(trials):
+        solution = gen.solve(seed, {"num_nodes": 6})
+        values = {
+            round(entry["signed_force"], 2) + 0.0 for entry in solution["member_solutions"].values()
+        }
+        # Nine members with two or fewer distinct answers reads as broken.
+        if len(values) <= 2:
+            too_uniform += 1
+
+    assert too_uniform == 0, f"{too_uniform}/{trials} nine-member problems had <=2 distinct answers"

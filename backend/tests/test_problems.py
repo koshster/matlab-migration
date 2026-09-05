@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -51,15 +53,26 @@ def test_truss_generator_integer_coordinates() -> None:
 
 
 def test_truss_generator_integer_forces_and_bounds() -> None:
-    """Verify force magnitudes are whole integers within 1 to 5 kN matching MATLAB randi(5)."""
+    """Force magnitudes are whole integers within 1 to 5 kN, matching MATLAB randi(5).
+
+    Checks the vector magnitude, not max(|fx|, |fy|). Those agree only for an
+    axis-aligned load, and loads are no longer axis-aligned -- that was the main
+    reason most member forces came out zero.
+    """
     for seed in range(1, 30):
         display_data = truss_generator.generate(seed)
         for element in display_data.visual_schema:
             if element.element_type == "point_load":
                 fx, fy = element.properties["force_vector"]
-                mag = max(abs(fx), abs(fy))
-                assert float(mag).is_integer(), f"Seed {seed} generated non-integer force: {mag}"
-                assert 1.0 <= mag <= 5.0, f"Seed {seed} generated out-of-range force: {mag}"
+                mag = math.hypot(fx, fy)
+                # Rotating an integer magnitude through 45 degrees cannot land
+                # exactly on an integer in binary floating point, so compare
+                # against the nearest whole number rather than demanding one.
+                nearest = round(mag)
+                assert math.isclose(mag, nearest, abs_tol=1e-9), (
+                    f"Seed {seed} generated non-integer force magnitude: {mag}"
+                )
+                assert 1 <= nearest <= 5, f"Seed {seed} generated out-of-range force: {mag}"
 
 
 def test_force_and_supports_do_not_overlap() -> None:
