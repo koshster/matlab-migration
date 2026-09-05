@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -51,6 +52,9 @@ class Assignment(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     hard_deadline_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    reveal_solutions_after_close: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -139,6 +143,10 @@ class StudentAssignment(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Distinct from submitted_at on purpose: an assignment that closed on its
+    # deadline is final, but the student never pressed Submit. Conflating the
+    # two would report a submission that did not happen.
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Relationships
