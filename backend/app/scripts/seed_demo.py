@@ -8,14 +8,16 @@ Students created
 A11111111  Alice Chen        demo1234   enrolled, in_progress  (3 correct, 1 wrong attempt)
 A22222222  Bob Torres        demo1234   enrolled, submitted     (8/8 perfect on truss-fall-2026)
 A33333333  Carol Kim         demo1234   enrolled, not_started   (opened the course, zero attempts)
-A44444444  Dave Patel        demo1234   pending invitation      (has account, hasn't accepted yet)
-A55555555  Emma Wu           —          unclaimed roster slot   (no account; invite links on register)
+A44444444  Dave Patel        demo1234   pending invite  (has account, not yet accepted)
+A55555555  Emma Wu           -          unclaimed slot  (no account; links on register)
 """
 
 import asyncio
+import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.db.models import (
@@ -39,12 +41,12 @@ _CORRECT_ANSWERS = {"S1": 2.5, "S2": -1.5, "S3": 0.5}
 _WRONG_ANSWERS = {"S1": 999.0, "S2": -999.0, "S3": 0.0}
 
 
-async def _get_student(db, pid: str) -> Student | None:
+async def _get_student(db: AsyncSession, pid: str) -> Student | None:
     row = await db.execute(select(Student).where(Student.pid == pid))
     return row.scalar_one_or_none()
 
 
-async def _ensure_student(db, pid: str, first: str, last: str) -> Student:
+async def _ensure_student(db: AsyncSession, pid: str, first: str, last: str) -> Student:
     s = await _get_student(db, pid)
     if s is None:
         s = Student(
@@ -61,7 +63,16 @@ async def _ensure_student(db, pid: str, first: str, last: str) -> Student:
     return s
 
 
-async def _ensure_roster(db, course, student_id, pid, first, last, status, accepted_at=None):
+async def _ensure_roster(
+    db: AsyncSession,
+    course: Course,
+    student_id: uuid.UUID | None,
+    pid: str,
+    first: str,
+    last: str,
+    status: str,
+    accepted_at: datetime | None = None,
+) -> None:
     row = await db.execute(
         select(RosterEntry).where(
             RosterEntry.course_id == course.id,
@@ -86,7 +97,7 @@ async def _ensure_roster(db, course, student_id, pid, first, last, status, accep
     print(f"  Roster entry {pid} ({status})")
 
 
-async def _ensure_enrollment(db, course, student_id):
+async def _ensure_enrollment(db: AsyncSession, course: Course, student_id: uuid.UUID) -> None:
     row = await db.execute(
         select(CourseEnrollment).where(
             CourseEnrollment.course_id == course.id,
@@ -94,20 +105,22 @@ async def _ensure_enrollment(db, course, student_id):
         )
     )
     if row.scalar_one_or_none() is None:
-        db.add(CourseEnrollment(
-            course_id=course.id,
-            student_id=student_id,
-            status="active",
-        ))
+        db.add(
+            CourseEnrollment(
+                course_id=course.id,
+                student_id=student_id,
+                status="active",
+            )
+        )
         await db.flush()
 
 
-async def _get_assignment(db, slug: str) -> Assignment | None:
+async def _get_assignment(db: AsyncSession, slug: str) -> Assignment | None:
     row = await db.execute(select(Assignment).where(Assignment.slug == slug))
     return row.scalar_one_or_none()
 
 
-async def _get_problems(db, assignment: Assignment) -> list[AssignmentProblem]:
+async def _get_problems(db: AsyncSession, assignment: Assignment) -> list[AssignmentProblem]:
     rows = await db.execute(
         select(AssignmentProblem)
         .where(AssignmentProblem.assignment_id == assignment.id)
@@ -116,7 +129,12 @@ async def _get_problems(db, assignment: Assignment) -> list[AssignmentProblem]:
     return list(rows.scalars().all())
 
 
-async def _get_or_create_sa(db, student_id, assignment_id, seed: int) -> tuple[StudentAssignment, bool]:
+async def _get_or_create_sa(
+    db: AsyncSession,
+    student_id: uuid.UUID,
+    assignment_id: uuid.UUID,
+    seed: int,
+) -> tuple[StudentAssignment, bool]:
     row = await db.execute(
         select(StudentAssignment).where(
             StudentAssignment.student_id == student_id,
@@ -137,25 +155,34 @@ async def _get_or_create_sa(db, student_id, assignment_id, seed: int) -> tuple[S
     return sa, True
 
 
-def _correct_verdicts(n_members: int) -> dict:
-    return {f"S{i+1}": True for i in range(n_members)}
+def _correct_verdicts(n_members: int) -> dict[str, bool]:
+    return {f"S{i + 1}": True for i in range(n_members)}
 
 
-def _wrong_verdicts(n_members: int) -> dict:
-    return {f"S{i+1}": False for i in range(n_members)}
+def _wrong_verdicts(n_members: int) -> dict[str, bool]:
+    return {f"S{i + 1}": False for i in range(n_members)}
 
 
-async def _submission(db, sa_id, prob_id, attempt, passed, n_members=3):
-    db.add(Submission(
-        student_assignment_id=sa_id,
-        assignment_problem_id=prob_id,
-        attempt_number=attempt,
-        answers=_CORRECT_ANSWERS if passed else _WRONG_ANSWERS,
-        raw_score=1.0 if passed else 0.0,
-        net_score=1.0 if passed else 0.0,
-        is_passed=passed,
-        field_verdicts=_correct_verdicts(n_members) if passed else _wrong_verdicts(n_members),
-    ))
+async def _submission(
+    db: AsyncSession,
+    sa_id: uuid.UUID,
+    prob_id: uuid.UUID,
+    attempt: int,
+    passed: bool,
+    n_members: int = 3,
+) -> None:
+    db.add(
+        Submission(
+            student_assignment_id=sa_id,
+            assignment_problem_id=prob_id,
+            attempt_number=attempt,
+            answers=_CORRECT_ANSWERS if passed else _WRONG_ANSWERS,
+            raw_score=1.0 if passed else 0.0,
+            net_score=1.0 if passed else 0.0,
+            is_passed=passed,
+            field_verdicts=_correct_verdicts(n_members) if passed else _wrong_verdicts(n_members),
+        )
+    )
 
 
 async def seed_demo() -> None:
@@ -244,7 +271,12 @@ async def seed_demo() -> None:
         print("\nDave Patel (A44444444):")
         dave = await _ensure_student(db, "A44444444", "Dave", "Patel")
         await _ensure_roster(
-            db, course, dave.id, "A44444444", "Dave", "Patel",
+            db,
+            course,
+            dave.id,
+            "A44444444",
+            "Dave",
+            "Patel",
             status="invited",
             accepted_at=None,
         )
@@ -262,15 +294,17 @@ async def seed_demo() -> None:
             )
         )
         if row.scalar_one_or_none() is None:
-            db.add(RosterEntry(
-                course_id=course.id,
-                student_id=None,
-                pid="A55555555",
-                email="emma.wu@university.edu",
-                first_name="Emma",
-                last_name="Wu",
-                status="invited",
-            ))
+            db.add(
+                RosterEntry(
+                    course_id=course.id,
+                    student_id=None,
+                    pid="A55555555",
+                    email="emma.wu@university.edu",
+                    first_name="Emma",
+                    last_name="Wu",
+                    status="invited",
+                )
+            )
             await db.flush()
             print("  Unclaimed roster slot (register as A55555555 to claim)")
         else:
