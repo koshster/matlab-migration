@@ -353,3 +353,16 @@ async def test_closed_without_opt_in_reveals_nothing(
     client, _ = past_due_client
     problem = (await client.get(f"/api/v1/assignments/{SLUG}/problems/1")).json()
     assert problem["correctAnswers"] is None
+
+
+@pytest.mark.asyncio
+async def test_revealed_answers_are_rounded_for_display(
+    reveal_closed_client: tuple[AsyncClient, AsyncSession],
+) -> None:
+    """A zero-force member reads as 0.0, not 3.79e-18."""
+    client, _ = reveal_closed_client
+    problem = (await client.get(f"/api/v1/assignments/{SLUG}/problems/1")).json()
+    for key, value in problem["correctAnswers"].items():
+        assert value == round(value, 2), f"{key} was not rounded: {value}"
+        # -0.0 renders as "-0.00" in an input box, which reads as a sign error.
+        assert not (value == 0 and str(value).startswith("-")), f"{key} is negative zero"

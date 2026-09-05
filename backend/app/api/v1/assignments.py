@@ -113,21 +113,28 @@ def _solution_answers(
     seed: int,
     params: dict[str, Any],
     members: list[dict[str, Any]],
+    decimals_by_key: dict[str, int | None] | None = None,
 ) -> dict[str, float]:
     """Reference answers keyed exactly like the student's own fields.
 
     Renaming into S1/S2/... is a second wall behind the reveal gate: no solver
     internals (`member_solutions`, `signed_force`, `magnitude`, `reactions`)
     can reach the wire even through a bug upstream.
+
+    Values are rounded to the precision the student was asked for. A zero-force
+    member otherwise reveals as 3.79e-18, which reads as noise rather than as
+    the zero it is. `+ 0.0` normalizes -0.0 to 0.0.
     """
     truth = generator.solve(seed=seed, params=params)
     keys = _member_key_order(truth["member_solutions"])
     out: dict[str, float] = {}
     for i, m in enumerate(members):
-        if i < len(keys):
-            out[member_field_key(m["id"])] = float(
-                truth["member_solutions"][keys[i]]["signed_force"]
-            )
+        if i >= len(keys):
+            continue
+        key = member_field_key(m["id"])
+        places = (decimals_by_key or {}).get(key)
+        value = float(truth["member_solutions"][keys[i]]["signed_force"])
+        out[key] = round(value, places if places is not None else 2) + 0.0
     return out
 
 
@@ -516,7 +523,12 @@ async def get_problem(
     # every other path never calls solve() at all.
     correct_answers: dict[str, float] | None = None
     if state.reveal_solutions:
-        correct_answers = _solution_answers(generator, seed, params, geometry["members"])
+        decimals_by_key = {
+            f["key"]: f.get("decimals") for g in answer_schema["groups"] for f in g["fields"]
+        }
+        correct_answers = _solution_answers(
+            generator, seed, params, geometry["members"], decimals_by_key
+        )
 
     return {
         "schemaVersion": 1,
