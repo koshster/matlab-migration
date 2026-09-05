@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useSession } from '../context/SessionContext'
 import { useAssignment, useProblem, useSaveAnswers, useCheckAnswers, useSubmit } from '../api/hooks'
@@ -9,6 +9,8 @@ import InstructionPanel from './InstructionPanel'
 import AnswerPanel from './AnswerPanel'
 import FeedbackPanel from './FeedbackPanel'
 import ActionBar from './ActionBar'
+import LockBanner from './LockBanner'
+import StatusBadge from './StatusBadge'
 
 export default function WorkspaceLayout() {
   const { slug = '' } = useParams<{ slug: string }>()
@@ -29,28 +31,42 @@ export default function WorkspaceLayout() {
   const checkMutation = useCheckAnswers(slug, currentIndex)
   const submitMutation = useSubmit(slug)
 
-  const locked = assignment?.locked ?? false
+  // Assignment-level: submitted or past its deadline. Problem-level: that,
+  // or this particular problem was already answered correctly.
+  const reviewMode = assignment?.locked ?? false
+  const problemLocked = problem?.locked ?? reviewMode
+  const correctAnswers = problem?.correctAnswers ?? null
   const totalProblems = assignment?.problemCount ?? 0
 
-  // Reset per-problem state when navigating to a new problem
+  // Hydrate saved answers once per problem.
+  //
+  // This used to key on the identity of `problem.savedAnswers`, so any
+  // background refetch (the query goes stale after 30s, so a window refocus is
+  // enough) handed back a fresh object and silently wiped whatever the student
+  // had typed since. Keying on the index and tracking what we last hydrated
+  // means a refetch of the same problem leaves in-flight edits alone.
+  const hydratedFor = useRef<number | null>(null)
   useEffect(() => {
-    setAnswers(problem?.savedAnswers ?? {})
+    if (!problem) return
+    if (hydratedFor.current === problem.index) return
+    hydratedFor.current = problem.index
+    setAnswers(problem.savedAnswers)
     setLastCheck(null)
     setIsDirty(false)
-  }, [currentIndex, problem?.savedAnswers])
+  }, [problem])
 
   // Warn on browser tab close/refresh when there are unsaved changes
   useEffect(() => {
     if (!isDirty) return
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault() }
     window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
+    return () => { window.removeEventListener('beforeunload', handler) }
   }, [isDirty])
 
   const confirmLeave = useCallback(() => {
-    if (!isDirty) return true
+    if (!isDirty || reviewMode) return true
     return window.confirm('You have unsaved answers. Leave without saving?')
-  }, [isDirty])
+  }, [isDirty, reviewMode])
 
   function navigate_problem(index: number) {
     if (totalProblems < 1) return
@@ -161,10 +177,10 @@ export default function WorkspaceLayout() {
             {saveStatus === 'saved' && (
               <span className="text-xs text-green-600">Saved ✓</span>
             )}
-            {locked && (
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                Submitted
-              </span>
+            {reviewMode && (
+              <StatusBadge
+                status={assignment?.lockReason === 'submitted' ? 'submitted' : 'closed'}
+              />
             )}
             <span className="text-sm font-medium text-gray-600">
               {assignment?.title ?? ''}
@@ -190,6 +206,12 @@ export default function WorkspaceLayout() {
             </div>
           ) : (
             <div className="flex flex-1 flex-col overflow-hidden">
+              <LockBanner
+                assignmentLockReason={assignment?.lockReason ?? null}
+                problemLockReason={problem.lockReason}
+                closesAt={assignment?.closesAt ?? null}
+                showingSolutions={!!correctAnswers}
+              />
               <InstructionPanel prompt={problem.prompt} />
 
               <div className="flex flex-1 overflow-hidden">
@@ -217,7 +239,8 @@ export default function WorkspaceLayout() {
                       setLastCheck(null)
                       setIsDirty(true)
                     }}
-                    disabled={locked}
+                    readOnly={problemLocked}
+                    correctAnswers={correctAnswers}
                   />
                 </div>
               </div>
@@ -234,7 +257,8 @@ export default function WorkspaceLayout() {
           onCheck={handleCheck}
           onSave={handleSave}
           onSubmit={handleSubmit}
-          locked={locked}
+          reviewMode={reviewMode}
+          problemLocked={problemLocked}
           checking={checkMutation.isPending}
           saveStatus={saveStatus}
         />

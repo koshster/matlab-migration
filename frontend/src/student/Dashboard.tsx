@@ -4,17 +4,11 @@ import { useStudentAssignments, useStudentInvitations } from '../api/hooks'
 import type { StudentAssignmentItem } from '../api/hooks'
 import { useSession, useSetSession } from '../context/SessionContext'
 import InvitationList from './InvitationList'
+import StatusBadge from '../components/StatusBadge'
 
-const statusLabel: Record<string, string> = {
-  not_started: 'Not started',
-  in_progress: 'In progress',
-  submitted: 'Submitted',
-}
-
-const statusStyle: Record<string, string> = {
-  not_started: 'bg-gray-100 text-gray-600',
-  in_progress: 'bg-blue-100 text-blue-700',
-  submitted: 'bg-green-100 text-green-700',
+/** Submitted or closed: either way the work is final and opens read-only. */
+function isFinal(status: string): boolean {
+  return status === 'submitted' || status === 'closed'
 }
 
 interface CourseGroup {
@@ -43,10 +37,12 @@ export default function StudentDashboard() {
     const byCourse = new Map<string, CourseGroup>()
     for (const a of assignments ?? []) {
       const c = a.course
-      if (!byCourse.has(c.id)) {
-        byCourse.set(c.id, { id: c.id, code: c.code, term: c.term, title: c.title ?? '', assignments: [] })
+      let group = byCourse.get(c.id)
+      if (!group) {
+        group = { id: c.id, code: c.code, term: c.term, title: c.title, assignments: [] }
+        byCourse.set(c.id, group)
       }
-      byCourse.get(c.id)!.assignments.push(a)
+      group.assignments.push(a)
     }
     return [...byCourse.values()]
   }, [assignments])
@@ -58,7 +54,7 @@ export default function StudentDashboard() {
     <main className="flex min-h-screen flex-col bg-gray-50">
       <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6">
         <button
-          onClick={() => setSelectedCourseId(null)}
+          onClick={() => { setSelectedCourseId(null) }}
           className="text-sm font-semibold text-gray-800 hover:text-blue-600"
         >
           Statics Platform
@@ -80,10 +76,13 @@ export default function StudentDashboard() {
         {selectedGroup ? (
           <CourseAssignments
             group={selectedGroup}
-            onBack={() => setSelectedCourseId(null)}
-            onOpen={(slug, submitted) =>
-              navigate(submitted ? `/assignment/${slug}/submitted` : `/assignment/${slug}`)
-            }
+            onBack={() => { setSelectedCourseId(null) }}
+            onOpen={(slug, final) => {
+              // Final work opens in the workspace in review mode -- the bare
+              // score screen shows a number and nothing the student can learn
+              // from. It is still reachable from there.
+              navigate(final ? `/assignment/${slug}?review=1` : `/assignment/${slug}`)
+            }}
           />
         ) : (
           <CourseList
@@ -138,12 +137,14 @@ function CourseList({ groups, isLoading, isError, hasInvitations, onSelectCourse
 
       <div className="flex flex-col gap-4">
         {groups.map((g) => {
-          const done = g.assignments.filter((a) => a.status === 'submitted').length
+          // A deadline-closed assignment is done too, even though nobody
+          // pressed Submit -- counting only 'submitted' would under-report it.
+          const done = g.assignments.filter((a) => isFinal(a.status)).length
           const inProgress = g.assignments.filter((a) => a.status === 'in_progress').length
           return (
             <button
               key={g.id}
-              onClick={() => onSelectCourse(g.id)}
+              onClick={() => { onSelectCourse(g.id) }}
               className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-6 py-5 shadow-sm text-left hover:border-blue-300 hover:shadow-md transition-all"
             >
               <div>
@@ -154,7 +155,7 @@ function CourseList({ groups, isLoading, isError, hasInvitations, onSelectCourse
                 <p className="mt-1 text-xs text-gray-500">
                   {g.assignments.length} assignment{g.assignments.length !== 1 ? 's' : ''}
                   {inProgress > 0 && ` · ${inProgress} in progress`}
-                  {done > 0 && ` · ${done} submitted`}
+                  {done > 0 && ` · ${done} completed`}
                 </p>
               </div>
               <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -175,7 +176,7 @@ function CourseList({ groups, isLoading, isError, hasInvitations, onSelectCourse
 interface CourseAssignmentsProps {
   group: CourseGroup
   onBack: () => void
-  onOpen: (slug: string, submitted: boolean) => void
+  onOpen: (slug: string, final: boolean) => void
 }
 
 function CourseAssignments({ group, onBack, onOpen }: CourseAssignmentsProps) {
@@ -207,14 +208,7 @@ function CourseAssignments({ group, onBack, onOpen }: CourseAssignmentsProps) {
             <div className="flex flex-col gap-1">
               <span className="text-sm font-semibold text-gray-900">{a.title}</span>
               <div className="flex items-center gap-3">
-                <span
-                  className={[
-                    'rounded-full px-2 py-0.5 text-xs font-medium',
-                    statusStyle[a.status] ?? 'bg-gray-100 text-gray-600',
-                  ].join(' ')}
-                >
-                  {statusLabel[a.status] ?? a.status}
-                </span>
+                <StatusBadge status={a.status} />
                 {a.dueAt && (
                   <span className="text-xs text-gray-400">
                     Due {new Date(a.dueAt).toLocaleDateString()}
@@ -229,10 +223,10 @@ function CourseAssignments({ group, onBack, onOpen }: CourseAssignmentsProps) {
             </div>
 
             <button
-              onClick={() => onOpen(a.slug, a.status === 'submitted')}
+              onClick={() => { onOpen(a.slug, isFinal(a.status)) }}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              {a.status === 'submitted' ? 'View Results' : 'Open'}
+              {isFinal(a.status) ? 'Review Answers' : 'Open'}
             </button>
           </div>
         ))}

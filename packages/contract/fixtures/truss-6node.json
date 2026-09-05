@@ -14,33 +14,125 @@
   "geometry": {
     "schemaVersion": 1,
     "nodes": [
-      { "id": 1, "x": 0, "y": 0 },
-      { "id": 2, "x": 3, "y": 0 },
-      { "id": 3, "x": 6, "y": 0 },
-      { "id": 4, "x": 9, "y": 0 },
-      { "id": 5, "x": 2, "y": 3 },
-      { "id": 6, "x": 6, "y": 4 }
+      {
+        "id": 1,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": 2,
+        "x": 3,
+        "y": 0
+      },
+      {
+        "id": 3,
+        "x": 6,
+        "y": 0
+      },
+      {
+        "id": 4,
+        "x": 9,
+        "y": 0
+      },
+      {
+        "id": 5,
+        "x": 2,
+        "y": 3
+      },
+      {
+        "id": 6,
+        "x": 6,
+        "y": 4
+      }
     ],
     "members": [
-      { "id": 1, "from": 1, "to": 2, "label": "S₁" },
-      { "id": 2, "from": 2, "to": 3, "label": "S₂" },
-      { "id": 3, "from": 3, "to": 4, "label": "S₃" },
-      { "id": 4, "from": 1, "to": 5, "label": "S₄" },
-      { "id": 5, "from": 2, "to": 5, "label": "S₅" },
-      { "id": 6, "from": 3, "to": 5, "label": "S₆" },
-      { "id": 7, "from": 3, "to": 6, "label": "S₇" },
-      { "id": 8, "from": 4, "to": 6, "label": "S₈" },
-      { "id": 9, "from": 5, "to": 6, "label": "S₉" }
+      {
+        "id": 1,
+        "from": 1,
+        "to": 2,
+        "label": "S₁"
+      },
+      {
+        "id": 2,
+        "from": 2,
+        "to": 3,
+        "label": "S₂"
+      },
+      {
+        "id": 3,
+        "from": 3,
+        "to": 4,
+        "label": "S₃"
+      },
+      {
+        "id": 4,
+        "from": 1,
+        "to": 5,
+        "label": "S₄"
+      },
+      {
+        "id": 5,
+        "from": 2,
+        "to": 5,
+        "label": "S₅"
+      },
+      {
+        "id": 6,
+        "from": 3,
+        "to": 5,
+        "label": "S₆"
+      },
+      {
+        "id": 7,
+        "from": 3,
+        "to": 6,
+        "label": "S₇"
+      },
+      {
+        "id": 8,
+        "from": 4,
+        "to": 6,
+        "label": "S₈"
+      },
+      {
+        "id": 9,
+        "from": 5,
+        "to": 6,
+        "label": "S₉"
+      }
     ],
     "supports": [
-      { "node": 1, "type": "pin",    "angleDeg": 0 },
-      { "node": 4, "type": "roller", "angleDeg": 0 }
+      {
+        "node": 1,
+        "type": "pin",
+        "angleDeg": 0
+      },
+      {
+        "node": 4,
+        "type": "roller",
+        "angleDeg": 0
+      }
     ],
     "forces": [
-      { "node": 5, "fx": 0, "fy": -3, "label": "3F" },
-      { "node": 6, "fx": -2, "fy": 0, "label": "2F" }
+      {
+        "node": 5,
+        "fx": 0,
+        "fy": -3,
+        "label": "3F"
+      },
+      {
+        "node": 6,
+        "fx": -2,
+        "fy": 0,
+        "label": "2F"
+      }
     ],
-    "bounds": { "xMin": -1, "xMax": 10.5, "yMin": -1, "yMax": 5.5 }
+    "bounds": {
+      "xMin": -1,
+      "xMax": 10.5,
+      "yMin": -1,
+      "yMax": 5.5
+    }
   },
   "answerSchema": {
     "groups": [
@@ -48,15 +140,69 @@
         "id": "member-forces",
         "label": "Member Forces",
         "fields": [
-          { "key": "S1", "label": "S₁", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S2", "label": "S₂", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S3", "label": "S₃", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S4", "label": "S₄", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S5", "label": "S₅", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S6", "label": "S₆", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S7", "label": "S₇", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S8", "label": "S₈", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S9", "label": "S₉", "unit": "F", "type": "number", "decimals": 2 }
+          {
+            "key": "S1",
+            "label": "S₁",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S2",
+            "label": "S₂",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S3",
+            "label": "S₃",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S4",
+            "label": "S₄",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S5",
+            "label": "S₅",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S6",
+            "label": "S₆",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S7",
+            "label": "S₇",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S8",
+            "label": "S₈",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S9",
+            "label": "S₉",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          }
         ]
       }
     ]
@@ -64,5 +210,7 @@
   "savedAnswers": {},
   "attemptCount": 0,
   "maxAttempts": null,
-  "locked": false
+  "locked": false,
+  "lockReason": null,
+  "correctAnswers": null
 }

@@ -51,15 +51,15 @@ describe('course invitations', () => {
     expect(within(card).getByText(/3 assignments waiting/)).toBeInTheDocument()
   })
 
-  it('starts with no assignments and explains why', async () => {
+  it('starts with no courses and explains why', async () => {
     renderDashboard()
     // Nothing accepted yet, so the dashboard points at the invitations above.
     expect(
-      await screen.findByText(/accept an invitation above to see your assignments/i),
+      await screen.findByText(/accept an invitation above to join a course/i),
     ).toBeInTheDocument()
   })
 
-  it('accepting an invitation reveals that course’s assignments', async () => {
+  it('accepting an invitation adds the course, and its work is one click away', async () => {
     const user = userEvent.setup()
     renderDashboard()
     await screen.findByText(/2 course invitations/i)
@@ -67,15 +67,20 @@ describe('course invitations', () => {
     const card = invitationCard('MAE-008')
     await user.click(within(card).getByRole('button', { name: /^accept$/i }))
 
-    // The payoff: work appears, and the invitation is gone.
-    expect(await screen.findByText('Truss Analysis — Fall 2026')).toBeInTheDocument()
-    expect(await screen.findByText('Final Exam Practice')).toBeInTheDocument()
+    // The dashboard is course-first: the payoff is a course card, and the
+    // assignments live one level in.
+    const courseCard = await screen.findByRole('button', { name: /MAE-008/ })
+    expect(courseCard).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.getByText(/you have a course invitation/i)).toBeInTheDocument()
     })
+
+    await user.click(courseCard)
+    expect(await screen.findByText('Truss Analysis — Fall 2026')).toBeInTheDocument()
+    expect(screen.getByText('Final Exam Practice')).toBeInTheDocument()
   })
 
-  it('does not group by course while only one is joined', async () => {
+  it('shows only the joined course while just one is accepted', async () => {
     const user = userEvent.setup()
     renderDashboard()
     await screen.findByText(/2 course invitations/i)
@@ -83,13 +88,13 @@ describe('course invitations', () => {
     await user.click(
       within(invitationCard('MAE-008')).getByRole('button', { name: /^accept$/i }),
     )
-    await screen.findByText('Truss Analysis — Fall 2026')
 
-    // A single course needs no heading — that would just be noise.
-    expect(screen.queryByRole('heading', { name: /MAE-008 · Statics/ })).toBeNull()
+    await screen.findByRole('button', { name: /MAE-008/ })
+    // The other course is still only an invitation, not a course card.
+    expect(screen.queryByRole('button', { name: /MAE-130 —/ })).toBeNull()
   })
 
-  it('groups assignments once a second course is joined', async () => {
+  it('lists both courses once a second is joined', async () => {
     const user = userEvent.setup()
     renderDashboard()
     await screen.findByText(/2 course invitations/i)
@@ -97,20 +102,17 @@ describe('course invitations', () => {
     await user.click(
       within(invitationCard('MAE-008')).getByRole('button', { name: /^accept$/i }),
     )
-    await screen.findByText('Truss Analysis — Fall 2026')
+    await screen.findByRole('button', { name: /MAE-008/ })
 
     await user.click(
       within(invitationCard('MAE-130')).getByRole('button', { name: /^accept$/i }),
     )
 
+    const second = await screen.findByRole('button', { name: /MAE-130/ })
+    expect(second).toBeInTheDocument()
+
+    await user.click(second)
     expect(await screen.findByText('Beam Reactions — Homework 1')).toBeInTheDocument()
-    // Now that there are two, both get a labelled section.
-    expect(
-      await screen.findByRole('heading', { name: /MAE-008 · Statics/ }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: /MAE-130 · Mechanics of Materials/ }),
-    ).toBeInTheDocument()
   })
 
   it('confirms before declining, and can be backed out of', async () => {

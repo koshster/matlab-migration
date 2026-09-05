@@ -14,27 +14,91 @@
   "geometry": {
     "schemaVersion": 1,
     "nodes": [
-      { "id": 1, "x": 0, "y": 0 },
-      { "id": 2, "x": 3, "y": 0 },
-      { "id": 3, "x": 6, "y": 0 },
-      { "id": 4, "x": 3, "y": 4 }
+      {
+        "id": 1,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": 2,
+        "x": 3,
+        "y": 0
+      },
+      {
+        "id": 3,
+        "x": 6,
+        "y": 0
+      },
+      {
+        "id": 4,
+        "x": 3,
+        "y": 4
+      }
     ],
     "members": [
-      { "id": 1, "from": 1, "to": 2, "label": "S₁" },
-      { "id": 2, "from": 2, "to": 3, "label": "S₂" },
-      { "id": 3, "from": 1, "to": 4, "label": "S₃" },
-      { "id": 4, "from": 2, "to": 4, "label": "S₄" },
-      { "id": 5, "from": 3, "to": 4, "label": "S₅" }
+      {
+        "id": 1,
+        "from": 1,
+        "to": 2,
+        "label": "S₁"
+      },
+      {
+        "id": 2,
+        "from": 2,
+        "to": 3,
+        "label": "S₂"
+      },
+      {
+        "id": 3,
+        "from": 1,
+        "to": 4,
+        "label": "S₃"
+      },
+      {
+        "id": 4,
+        "from": 2,
+        "to": 4,
+        "label": "S₄"
+      },
+      {
+        "id": 5,
+        "from": 3,
+        "to": 4,
+        "label": "S₅"
+      }
     ],
     "supports": [
-      { "node": 1, "type": "pin",    "angleDeg": 0 },
-      { "node": 3, "type": "roller", "angleDeg": 0 }
+      {
+        "node": 1,
+        "type": "pin",
+        "angleDeg": 0
+      },
+      {
+        "node": 3,
+        "type": "roller",
+        "angleDeg": 0
+      }
     ],
     "forces": [
-      { "node": 4, "fx": 2, "fy": -4, "label": "" },
-      { "node": 2, "fx": 0, "fy": -2, "label": "2F" }
+      {
+        "node": 4,
+        "fx": 2,
+        "fy": -4,
+        "label": ""
+      },
+      {
+        "node": 2,
+        "fx": 0,
+        "fy": -2,
+        "label": "2F"
+      }
     ],
-    "bounds": { "xMin": -1, "xMax": 7, "yMin": -1, "yMax": 5.5 }
+    "bounds": {
+      "xMin": -1,
+      "xMax": 7,
+      "yMin": -1,
+      "yMax": 5.5
+    }
   },
   "answerSchema": {
     "groups": [
@@ -42,11 +106,41 @@
         "id": "member-forces",
         "label": "Member Forces",
         "fields": [
-          { "key": "S1", "label": "S₁", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S2", "label": "S₂", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S3", "label": "S₃", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S4", "label": "S₄", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S5", "label": "S₅", "unit": "F", "type": "number", "decimals": 2 }
+          {
+            "key": "S1",
+            "label": "S₁",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S2",
+            "label": "S₂",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S3",
+            "label": "S₃",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S4",
+            "label": "S₄",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S5",
+            "label": "S₅",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          }
         ]
       }
     ]
@@ -54,5 +148,7 @@
   "savedAnswers": {},
   "attemptCount": 0,
   "maxAttempts": null,
-  "locked": false
+  "locked": false,
+  "lockReason": null,
+  "correctAnswers": null
 }

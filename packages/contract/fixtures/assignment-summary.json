@@ -8,14 +8,57 @@
   "dueAt": "2026-12-15T23:59:00Z",
   "locked": false,
   "problems": [
-    { "index": 1, "status": "correct",    "attemptCount": 2 },
-    { "index": 2, "status": "incorrect",  "attemptCount": 1 },
-    { "index": 3, "status": "no_attempt", "attemptCount": 0 },
-    { "index": 4, "status": "no_attempt", "attemptCount": 0 },
-    { "index": 5, "status": "no_attempt", "attemptCount": 0 },
-    { "index": 6, "status": "no_attempt", "attemptCount": 0 },
-    { "index": 7, "status": "no_attempt", "attemptCount": 0 },
-    { "index": 8, "status": "no_attempt", "attemptCount": 0 }
+    {
+      "index": 1,
+      "status": "correct",
+      "attemptCount": 2,
+      "locked": true
+    },
+    {
+      "index": 2,
+      "status": "incorrect",
+      "attemptCount": 1,
+      "locked": false
+    },
+    {
+      "index": 3,
+      "status": "no_attempt",
+      "attemptCount": 0,
+      "locked": false
+    },
+    {
+      "index": 4,
+      "status": "no_attempt",
+      "attemptCount": 0,
+      "locked": false
+    },
+    {
+      "index": 5,
+      "status": "no_attempt",
+      "attemptCount": 0,
+      "locked": false
+    },
+    {
+      "index": 6,
+      "status": "no_attempt",
+      "attemptCount": 0,
+      "locked": false
+    },
+    {
+      "index": 7,
+      "status": "no_attempt",
+      "attemptCount": 0,
+      "locked": false
+    },
+    {
+      "index": 8,
+      "status": "no_attempt",
+      "attemptCount": 0,
+      "locked": false
+    }
   ],
-  "score": null
+  "score": null,
+  "lockReason": null,
+  "closesAt": "2026-12-15T23:59:00Z",
+  "revealSolutions": false
 }

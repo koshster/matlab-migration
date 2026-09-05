@@ -14,23 +14,68 @@
   "geometry": {
     "schemaVersion": 1,
     "nodes": [
-      { "id": 1, "x": 0, "y": 0 },
-      { "id": 2, "x": 4, "y": 0 },
-      { "id": 3, "x": 2, "y": 3 }
+      {
+        "id": 1,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "id": 2,
+        "x": 4,
+        "y": 0
+      },
+      {
+        "id": 3,
+        "x": 2,
+        "y": 3
+      }
     ],
     "members": [
-      { "id": 1, "from": 1, "to": 2, "label": "S₁" },
-      { "id": 2, "from": 1, "to": 3, "label": "S₂" },
-      { "id": 3, "from": 2, "to": 3, "label": "S₃" }
+      {
+        "id": 1,
+        "from": 1,
+        "to": 2,
+        "label": "S₁"
+      },
+      {
+        "id": 2,
+        "from": 1,
+        "to": 3,
+        "label": "S₂"
+      },
+      {
+        "id": 3,
+        "from": 2,
+        "to": 3,
+        "label": "S₃"
+      }
     ],
     "supports": [
-      { "node": 1, "type": "pin",    "angleDeg": 0 },
-      { "node": 2, "type": "roller", "angleDeg": 0 }
+      {
+        "node": 1,
+        "type": "pin",
+        "angleDeg": 0
+      },
+      {
+        "node": 2,
+        "type": "roller",
+        "angleDeg": 0
+      }
     ],
     "forces": [
-      { "node": 3, "fx": 0, "fy": -3, "label": "3F" }
+      {
+        "node": 3,
+        "fx": 0,
+        "fy": -3,
+        "label": "3F"
+      }
     ],
-    "bounds": { "xMin": -1, "xMax": 5, "yMin": -1, "yMax": 4.5 }
+    "bounds": {
+      "xMin": -1,
+      "xMax": 5,
+      "yMin": -1,
+      "yMax": 4.5
+    }
   },
   "answerSchema": {
     "groups": [
@@ -38,9 +83,27 @@
         "id": "member-forces",
         "label": "Member Forces",
         "fields": [
-          { "key": "S1", "label": "S₁", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S2", "label": "S₂", "unit": "F", "type": "number", "decimals": 2 },
-          { "key": "S3", "label": "S₃", "unit": "F", "type": "number", "decimals": 2 }
+          {
+            "key": "S1",
+            "label": "S₁",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S2",
+            "label": "S₂",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          },
+          {
+            "key": "S3",
+            "label": "S₃",
+            "unit": "F",
+            "type": "number",
+            "decimals": 2
+          }
         ]
       }
     ]
@@ -48,5 +111,7 @@
   "savedAnswers": {},
   "attemptCount": 0,
   "maxAttempts": null,
-  "locked": false
+  "locked": false,
+  "lockReason": null,
+  "correctAnswers": null
 }
