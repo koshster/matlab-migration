@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.assignments import is_gradeable
 from app.core.security import get_current_student_id
 from app.db.models import (
     Assignment,
@@ -24,6 +25,8 @@ from app.db.models import (
     Submission,
 )
 from app.db.session import get_db
+from app.services.access import compute_access, isoformat_utc, problem_status
+from app.services.scoring import compute_score
 
 router = APIRouter(prefix="/student", tags=["student"])
 
@@ -350,32 +353,33 @@ async def list_student_assignments(
 
         sa = sa_by_assign_id.get(assignment.id)
         if sa:
-            locked = bool(sa.submitted_at)
             subs_by_problem: dict[uuid.UUID, list[Submission]] = {}
             for sub in sa.submissions:
                 subs_by_problem.setdefault(sub.assignment_problem_id, []).append(sub)
 
+            # Same predicate the workspace uses, so the dashboard badge and the
+            # assignment itself can never disagree about whether it is closed.
+            state = compute_access(assignment, sa)
             problems_status = [
-                (
-                    "correct"
-                    if any(s.is_passed for s in subs_by_problem.get(ap.id, []))
-                    else "incorrect"
-                    if subs_by_problem.get(ap.id)
-                    else "no_attempt"
-                )
-                for ap in assignment.problems
+                problem_status(subs_by_problem.get(ap.id, [])) for ap in assignment.problems
             ]
 
-            if locked:
-                earned = sum(1 for s in problems_status if s == "correct")
-                assign_status = "submitted"
-                score: dict[str, Any] | None = {"earned": earned, "total": len(assignment.problems)}
+            score: dict[str, Any] | None = None
+            if state.closed:
+                # Read-only: the list endpoint must not issue a write per row
+                # for one page view. Finalization happens when the student or
+                # an instructor opens the assignment itself.
+                breakdown = compute_score(
+                    assignment.problems,
+                    subs_by_problem,
+                    {ap.problem_type: is_gradeable(ap.problem_type) for ap in assignment.problems},
+                )
+                score = {"earned": breakdown.earned, "total": breakdown.total}
+                assign_status = "submitted" if state.close_reason == "submitted" else "closed"
             elif any(s != "no_attempt" for s in problems_status):
                 assign_status = "in_progress"
-                score = None
             else:
                 assign_status = "not_started"
-                score = None
         else:
             assign_status = "not_started"
             score = None
@@ -387,7 +391,7 @@ async def list_student_assignments(
                 "title": assignment.title,
                 "status": assign_status,
                 "score": score,
-                "dueAt": assignment.due_at.isoformat() if assignment.due_at else None,
+                "dueAt": isoformat_utc(assignment.due_at),
                 "problemCount": len(assignment.problems),
                 "course": {
                     "id": str(course.id),

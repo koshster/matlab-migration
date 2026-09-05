@@ -1860,8 +1860,11 @@ components:
             correctly, or the whole assignment closed.
         lockReason:
           type: string
-          enum: [correct, submitted, past_due]
+          enum: [correct, submitted, past_due, unavailable]
           nullable: true
+          description: >
+            `unavailable` means this problem type has no server-side solver
+            yet, so it can be displayed but not answered.
         correctAnswers:
           type: object
           nullable: true

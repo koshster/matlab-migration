@@ -1043,8 +1043,11 @@ export interface components {
             maxAttempts: number | null;
             /** @description True when this problem is read-only — either already answered correctly, or the whole assignment closed. */
             locked: boolean;
-            /** @enum {string|null} */
-            lockReason: "correct" | "submitted" | "past_due" | null;
+            /**
+             * @description `unavailable` means this problem type has no server-side solver yet, so it can be displayed but not answered.
+             * @enum {string|null}
+             */
+            lockReason: "correct" | "submitted" | "past_due" | "unavailable" | null;
             /** @description Reference solution, keyed like `savedAnswers`. Populated ONLY when the assignment is closed AND the instructor enabled solution reveal; null in every other case. */
             correctAnswers: {
                 [key: string]: number;
