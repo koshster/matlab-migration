@@ -14,3 +14,7 @@ Document ambiguities here, pick the conservative default, and revisit with Prof.
 | 8 | Strict email validation — worth the `pydantic[email]` dependency? | Structural check in `app/core/identity.py`; revisit if we send mail (roster invites) | Open |
 | 9 | PID normalization (case/whitespace) for invite matching | Lands with Phase B's `pid_normalized` column + backfill; normalizing before then would break existing logins | Open |
 | 10 | Support profile as a difficulty knob | Not exposed — `solve_support_reactions` raises for anything but 1 pin + 1 roller; the legacy 0-pin/3-roller branch is unported | Open |
+| 11 | Should a closed assignment reopen if an instructor extends `due_at`? | No — closure is one-way; a reopen endpoint is deliberately out of scope | Open |
+| 12 | Is `opens_at` enforced, or advisory? | Advisory — carried on the wire, never gates access, since the direct-slug route intentionally performs no gating | Open |
+| 13 | Which denominator does per-problem "success rate" use? | Correct ÷ attempted; students who never attempted are excluded | Decided |
+| 14 | Grading tolerance is relative (`tol × max(|true|, 1)`), not the absolute 0.01 the legacy app used | Left relative — it is strictly more lenient at the rounding precision students are asked for | Open |
