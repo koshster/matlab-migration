@@ -234,6 +234,33 @@ const adminKeys = {
   course: (id: string) => ['admin', 'course', id] as const,
   roster: (id: string) => ['admin', 'course', id, 'roster'] as const,
   staff: (id: string) => ['admin', 'course', id, 'staff'] as const,
+  gradebook: (id: string) => ['admin', 'assignment', id, 'gradebook'] as const,
+  analytics: (id: string) => ['admin', 'assignment', id, 'analytics'] as const,
+}
+
+type GradebookResponse = components['schemas']['GradebookResponse']
+type AssignmentAnalytics = components['schemas']['AssignmentAnalytics']
+
+export type { GradebookResponse, AssignmentAnalytics }
+
+/**
+ * Both of these are live views, not post-mortems -- the server does not gate
+ * them on the assignment being closed, so staff can watch progress.
+ */
+export function useGradebook(assignmentId: string) {
+  return useQuery<GradebookResponse, ApiError>({
+    queryKey: adminKeys.gradebook(assignmentId),
+    queryFn: () => apiFetch(`/api/v1/admin/assignments/${assignmentId}/gradebook`),
+    enabled: !!assignmentId,
+  })
+}
+
+export function useAssignmentAnalytics(assignmentId: string) {
+  return useQuery<AssignmentAnalytics, ApiError>({
+    queryKey: adminKeys.analytics(assignmentId),
+    queryFn: () => apiFetch(`/api/v1/admin/assignments/${assignmentId}/analytics`),
+    enabled: !!assignmentId,
+  })
 }
 
 export function useCourses() {

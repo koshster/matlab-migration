@@ -278,4 +278,120 @@ export const adminHandlers = [
     staff.push(member)
     return HttpResponse.json(member, { status: 201 })
   }),
+
+  // ---------------------------------------------------------------------
+  // Grades: a small but realistic spread -- one student finished, one
+  // mid-assignment, one who never opened it. The last case is the one the
+  // roster-driven denominator exists for.
+  // ---------------------------------------------------------------------
+  http.get(`${BASE}/admin/assignments/:assignmentId/gradebook`, ({ params }) => {
+    const assignmentId = String(params['assignmentId'])
+    return HttpResponse.json({
+      assignmentId,
+      slug: 'truss-fall-2026',
+      title: 'Truss Analysis — Fall 2026',
+      totalPoints: 3,
+      closesAt: '2026-12-15T23:59:00Z',
+      problems: [
+        { index: 1, problemType: 'truss', points: 1, gradeable: true },
+        { index: 2, problemType: 'truss', points: 1, gradeable: true },
+        { index: 3, problemType: 'truss', points: 1, gradeable: true },
+      ],
+      rows: [
+        {
+          studentId: 'ddddddd1-0000-4000-8000-000000000001',
+          displayName: 'Alice Chen',
+          externalId: 'A11111111',
+          status: 'submitted',
+          earned: 3,
+          total: 3,
+          submittedAt: '2026-11-01T10:00:00Z',
+          lastActivityAt: '2026-11-01T10:00:00Z',
+          problems: [
+            { index: 1, status: 'correct', attemptCount: 1 },
+            { index: 2, status: 'correct', attemptCount: 2 },
+            { index: 3, status: 'correct', attemptCount: 1 },
+          ],
+        },
+        {
+          studentId: 'ddddddd1-0000-4000-8000-000000000002',
+          displayName: 'Bob Torres',
+          externalId: 'A22222222',
+          status: 'in_progress',
+          earned: null,
+          total: 3,
+          submittedAt: null,
+          lastActivityAt: '2026-11-02T14:30:00Z',
+          problems: [
+            { index: 1, status: 'correct', attemptCount: 1 },
+            { index: 2, status: 'incorrect', attemptCount: 3 },
+            { index: 3, status: 'no_attempt', attemptCount: 0 },
+          ],
+        },
+        {
+          studentId: null,
+          displayName: 'Carol Kim',
+          externalId: 'A33333333',
+          status: 'not_started',
+          earned: null,
+          total: 3,
+          submittedAt: null,
+          lastActivityAt: null,
+          problems: [
+            { index: 1, status: 'no_attempt', attemptCount: 0 },
+            { index: 2, status: 'no_attempt', attemptCount: 0 },
+            { index: 3, status: 'no_attempt', attemptCount: 0 },
+          ],
+        },
+      ],
+    })
+  }),
+
+  http.get(`${BASE}/admin/assignments/:assignmentId/analytics`, ({ params }) => {
+    return HttpResponse.json({
+      assignmentId: String(params['assignmentId']),
+      slug: 'truss-fall-2026',
+      title: 'Truss Analysis — Fall 2026',
+      totalPoints: 3,
+      closesAt: '2026-12-15T23:59:00Z',
+      studentCount: 3,
+      startedCount: 2,
+      submittedCount: 1,
+      closedCount: 1,
+      gradedCount: 1,
+      meanScore: 3,
+      medianScore: 3,
+      minScore: 3,
+      maxScore: 3,
+      problems: [
+        {
+          index: 1,
+          problemType: 'truss',
+          gradeable: true,
+          attemptedCount: 2,
+          correctCount: 2,
+          successRate: 1,
+          meanAttempts: 1,
+        },
+        {
+          index: 2,
+          problemType: 'truss',
+          gradeable: true,
+          attemptedCount: 2,
+          correctCount: 1,
+          successRate: 0.5,
+          meanAttempts: 2.5,
+        },
+        {
+          index: 3,
+          problemType: 'truss',
+          gradeable: true,
+          attemptedCount: 1,
+          correctCount: 1,
+          successRate: 1,
+          meanAttempts: 1,
+        },
+      ],
+    })
+  }),
 ]

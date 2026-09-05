@@ -83,6 +83,9 @@ export default function AssignmentBuilder() {
       instructions: current.instructions,
       dueAt: current.dueAt,
       opensAt: current.opensAt,
+      hardDeadlineAt: current.hardDeadlineAt,
+      allowLate: current.allowLate,
+      revealSolutionsAfterClose: current.revealSolutionsAfterClose,
       tolerance: current.tolerance,
       feedbackMode: current.feedbackMode,
       maxAttempts: current.maxAttempts,
@@ -209,10 +212,50 @@ export default function AssignmentBuilder() {
             />
             <DateTime
               label="Due at"
-              help="Leave blank for no deadline."
+              help={
+                draft.allowLate
+                  ? 'Advisory while late work is allowed.'
+                  : 'Closes the assignment. Leave blank for no deadline.'
+              }
               value={draft.dueAt}
               onChange={(v) => { set('dueAt', v) }}
             />
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-gray-600">Late work</span>
+              <span className="flex items-center gap-2 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={draft.allowLate}
+                  onChange={(e) => { set('allowLate', e.target.checked) }}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">Accept work after the due date</span>
+              </span>
+              <span className="text-xs text-gray-400">
+                When on, the hard deadline is what actually closes it.
+              </span>
+            </label>
+            <DateTime
+              label="Hard deadline"
+              help="Absolute cutoff. Only used when late work is allowed."
+              value={draft.hardDeadlineAt}
+              onChange={(v) => { set('hardDeadlineAt', v) }}
+            />
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-gray-600">After closing</span>
+              <span className="flex items-center gap-2 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={draft.revealSolutionsAfterClose}
+                  onChange={(e) => { set('revealSolutionsAfterClose', e.target.checked) }}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">Show students the correct answers</span>
+              </span>
+              <span className="text-xs text-gray-400">
+                Off by default. Solutions are never sent before the assignment closes.
+              </span>
+            </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-gray-600">Feedback</span>
               <select

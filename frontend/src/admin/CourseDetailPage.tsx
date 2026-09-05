@@ -5,13 +5,15 @@ import RosterTable from './RosterTable'
 import RosterImportPanel from './RosterImportPanel'
 import StaffTab from './StaffTab'
 import AssignmentsTab from './AssignmentsTab'
+import GradesTab from './GradesTab'
 import { useCourse, useUpdateCourse } from '../api/hooks'
 
-type Tab = 'roster' | 'assignments' | 'staff'
+type Tab = 'roster' | 'assignments' | 'grades' | 'staff'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'roster', label: 'Roster' },
   { key: 'assignments', label: 'Assignments' },
+  { key: 'grades', label: 'Grades' },
   { key: 'staff', label: 'Staff' },
 ]
 
@@ -140,6 +142,8 @@ export default function CourseDetailPage() {
       {tab === 'assignments' && (
         <AssignmentsTab courseId={courseId} canManage={canManageRoster} />
       )}
+
+      {tab === 'grades' && <GradesTab courseId={courseId} />}
 
       {tab === 'staff' && (
         <StaffTab courseId={courseId} canManage={course.viewerRole === 'owner'} />
