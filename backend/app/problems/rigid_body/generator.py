@@ -4,8 +4,9 @@ This module provides the unified domain engine for 2D rigid body statics problem
 It implements the 6 required protocol members:
 1. `problem_type` -> "rigid_body"
 2. `display_name` -> "2D Rigid Body Equilibrium"
-3. `params_schema` -> Configurable difficulty knobs:
-   (support_case, num_loads, num_moments, max_force)
+3. `params_schema` -> Configurable difficulty knobs: support configuration,
+   how many forces and couples are applied, and the direction and magnitude
+   range of each load family
 4. `generate(seed, params)` -> Emits ProblemDisplayData (zero solution leakage)
 5. `solve(seed, params)` -> Computes exact server-side ground truth reactions
 6. `check(seed, submission, tolerance, params)` -> Evaluates student answers
@@ -21,12 +22,22 @@ from app.problems.base import (
     FieldResult,
     GradingResult,
     ParamFieldSpec,
+    ParamOption,
     ProblemDisplayData,
     VisualElementSchema,
 )
 from app.problems.registry import problem_registry
 from app.problems.rigid_body.geometry import generate_rigid_body_geometry
-from app.problems.rigid_body.loads import generate_loads
+from app.problems.rigid_body.loads import (
+    FORCE_DIRECTION_ANY,
+    FORCE_DIRECTION_DOWNWARD,
+    FORCE_DIRECTION_HORIZONTAL,
+    FORCE_DIRECTION_VERTICAL,
+    MOMENT_DIRECTION_ANY,
+    MOMENT_DIRECTION_CCW,
+    MOMENT_DIRECTION_CW,
+    generate_loads,
+)
 from app.problems.rigid_body.solver import solve_rigid_body_reactions
 from app.problems.rigid_body.supports import generate_supports
 
@@ -48,11 +59,21 @@ class RigidBodyGenerator:
     def params_schema(self) -> list[ParamFieldSpec]:
         """Configurable difficulty knobs exposed to instructors in the assignment builder.
 
+        These cover the "Number, Type, & Placement of Loads" and "Directions and
+        Magnitudes of Loads" parameterization axes from the course design deck.
+
         Knobs:
             - `support_case`: Selects boundary conditions (1: 3 Rollers, 2: Pin+Roller, 3: Wall).
             - `num_loads`: Number of applied point forces (1 to 4).
+            - `load_direction`: Which cardinal directions point loads may take.
+            - `min_force` / `max_force`: Inclusive point load magnitude range in kN.
             - `num_moments`: Number of concentrated couple moments (0 to 2).
-            - `max_force`: Upper bound for point force magnitudes in kN (1 to 20).
+            - `moment_direction`: Rotational sense of the couples (CCW, CW, or either).
+            - `min_moment` / `max_moment`: Inclusive couple magnitude range in Fa units.
+
+        Setting a range's two bounds equal pins every load of that family to
+        exactly that magnitude, which is how a fixed "3F and F" style problem is
+        configured.
         """
         return [
             ParamFieldSpec(
@@ -63,7 +84,12 @@ class RigidBodyGenerator:
                 minimum=1,
                 maximum=3,
                 step=1,
-                help_text="1: 3 Rollers, 2: Pin + Roller (default), 3: Fixed Cantilever Wall.",
+                help_text="Boundary conditions holding the body in equilibrium.",
+                options=[
+                    ParamOption(value=1, label="3 Rollers"),
+                    ParamOption(value=2, label="Pin + Roller"),
+                    ParamOption(value=3, label="Fixed Cantilever Wall"),
+                ],
             ),
             ParamFieldSpec(
                 name="num_loads",
@@ -76,14 +102,33 @@ class RigidBodyGenerator:
                 help_text="Number of external point forces applied to the rigid body.",
             ),
             ParamFieldSpec(
-                name="num_moments",
-                label="Applied couple moments",
+                name="load_direction",
+                label="Force direction",
                 value_type="integer",
-                default=0,
-                minimum=0,
-                maximum=2,
+                default=FORCE_DIRECTION_ANY,
+                minimum=FORCE_DIRECTION_ANY,
+                maximum=FORCE_DIRECTION_DOWNWARD,
                 step=1,
-                help_text="Number of concentrated couple moments applied to the rigid body.",
+                help_text=(
+                    "Restricts which cardinal directions point loads may take. "
+                    "Downward only produces gravity-style loading."
+                ),
+                options=[
+                    ParamOption(value=FORCE_DIRECTION_ANY, label="Any direction"),
+                    ParamOption(value=FORCE_DIRECTION_VERTICAL, label="Vertical only"),
+                    ParamOption(value=FORCE_DIRECTION_HORIZONTAL, label="Horizontal only"),
+                    ParamOption(value=FORCE_DIRECTION_DOWNWARD, label="Downward only"),
+                ],
+            ),
+            ParamFieldSpec(
+                name="min_force",
+                label="Min load magnitude (kN)",
+                value_type="integer",
+                default=1,
+                minimum=1,
+                maximum=20,
+                step=1,
+                help_text="Lower bound for applied point load magnitudes.",
             ),
             ParamFieldSpec(
                 name="max_force",
@@ -94,6 +139,51 @@ class RigidBodyGenerator:
                 maximum=20,
                 step=1,
                 help_text="Upper bound for applied point load magnitudes.",
+            ),
+            ParamFieldSpec(
+                name="num_moments",
+                label="Applied couple moments",
+                value_type="integer",
+                default=0,
+                minimum=0,
+                maximum=2,
+                step=1,
+                help_text="Number of concentrated couple moments applied to the rigid body.",
+            ),
+            ParamFieldSpec(
+                name="moment_direction",
+                label="Couple direction",
+                value_type="integer",
+                default=MOMENT_DIRECTION_ANY,
+                minimum=MOMENT_DIRECTION_ANY,
+                maximum=MOMENT_DIRECTION_CW,
+                step=1,
+                help_text="Rotational sense of the applied couple moments.",
+                options=[
+                    ParamOption(value=MOMENT_DIRECTION_ANY, label="Either sense"),
+                    ParamOption(value=MOMENT_DIRECTION_CCW, label="Counterclockwise"),
+                    ParamOption(value=MOMENT_DIRECTION_CW, label="Clockwise"),
+                ],
+            ),
+            ParamFieldSpec(
+                name="min_moment",
+                label="Min couple magnitude (Fa)",
+                value_type="integer",
+                default=1,
+                minimum=1,
+                maximum=20,
+                step=1,
+                help_text="Lower bound for applied couple moment magnitudes.",
+            ),
+            ParamFieldSpec(
+                name="max_moment",
+                label="Max couple magnitude (Fa)",
+                value_type="integer",
+                default=5,
+                minimum=1,
+                maximum=20,
+                step=1,
+                help_text="Upper bound for applied couple moment magnitudes.",
             ),
         ]
 
@@ -118,6 +208,29 @@ class RigidBodyGenerator:
         n_forces = int(p.get("num_loads", 2))
         n_moments = int(p.get("num_moments", 0))
         max_force = float(p.get("max_force", 5.0))
+        min_force = float(p.get("min_force", 1.0))
+        max_moment = float(p.get("max_moment", 5.0))
+        min_moment = float(p.get("min_moment", 1.0))
+
+        # Unrecognised direction codes fall back to the unconstrained mode rather
+        # than raising: params come from a JSON column an older assignment may
+        # have been saved with, and a stale value must still render a problem.
+        force_direction = int(p.get("load_direction", FORCE_DIRECTION_ANY))
+        if force_direction not in (
+            FORCE_DIRECTION_ANY,
+            FORCE_DIRECTION_VERTICAL,
+            FORCE_DIRECTION_HORIZONTAL,
+            FORCE_DIRECTION_DOWNWARD,
+        ):
+            force_direction = FORCE_DIRECTION_ANY
+
+        moment_direction = int(p.get("moment_direction", MOMENT_DIRECTION_ANY))
+        if moment_direction not in (
+            MOMENT_DIRECTION_ANY,
+            MOMENT_DIRECTION_CCW,
+            MOMENT_DIRECTION_CW,
+        ):
+            moment_direction = MOMENT_DIRECTION_ANY
 
         # Iteratively synthesize until an admissible determinate configuration is found
         for _ in range(50):
@@ -135,6 +248,11 @@ class RigidBodyGenerator:
                     n_forces=n_forces,
                     n_moments=n_moments,
                     max_force=max_force,
+                    min_force=min_force,
+                    force_direction=force_direction,
+                    max_moment=max_moment,
+                    min_moment=min_moment,
+                    moment_direction=moment_direction,
                 )
                 return path_nodes, unique_nodes, surroundings, supports, loads
 
@@ -145,7 +263,16 @@ class RigidBodyGenerator:
         supports, free_nodes, free_surr, _ = generate_supports(
             unique_nodes, surroundings, support_case=2, rng=rng
         )
-        loads = generate_loads(free_nodes, free_surr, rng, n_forces=1, n_moments=0, max_force=5.0)
+        loads = generate_loads(
+            free_nodes,
+            free_surr,
+            rng,
+            n_forces=1,
+            n_moments=0,
+            max_force=max_force,
+            min_force=min_force,
+            force_direction=force_direction,
+        )
         return path_nodes, unique_nodes, surroundings, supports, loads
 
     def generate(self, seed: int, params: dict[str, Any] | None = None) -> ProblemDisplayData:
@@ -245,6 +372,10 @@ class RigidBodyGenerator:
             )
 
         # 6. Expected Student Answer Fields based on active support reactions
+        # Labels are the bare reaction symbol -- "Ax", "By", "MA" -- to match the
+        # support letter in the diagram. AnswerPanel renders the label in a narrow
+        # fixed-width gutter and shows `unit` separately, so a prose label like
+        # "Horizontal Reaction Ax (kN)" both wrapped and repeated the unit.
         answer_schema: list[AnswerFieldSpec] = []
         walls = supports.get("walls", [])
         fixed_pins = supports.get("fixed_pins", [])
@@ -256,19 +387,19 @@ class RigidBodyGenerator:
                 [
                     AnswerFieldSpec(
                         field_id="reaction_Ax",
-                        label="Horizontal Reaction Ax (kN)",
+                        label="Ax",
                         unit="kN",
                         value_type="numeric",
                     ),
                     AnswerFieldSpec(
                         field_id="reaction_Ay",
-                        label="Vertical Reaction Ay (kN)",
+                        label="Ay",
                         unit="kN",
                         value_type="numeric",
                     ),
                     AnswerFieldSpec(
                         field_id="reaction_MA",
-                        label="Reaction Moment MA (kN-m)",
+                        label="MA",
                         unit="kN-m",
                         value_type="numeric",
                     ),
@@ -283,19 +414,19 @@ class RigidBodyGenerator:
                 [
                     AnswerFieldSpec(
                         field_id="reaction_Ax",
-                        label="Pin Reaction Ax (kN)",
+                        label="Ax",
                         unit="kN",
                         value_type="numeric",
                     ),
                     AnswerFieldSpec(
                         field_id="reaction_Ay",
-                        label="Pin Reaction Ay (kN)",
+                        label="Ay",
                         unit="kN",
                         value_type="numeric",
                     ),
                     AnswerFieldSpec(
                         field_id=f"reaction_{roller_label}",
-                        label=f"Roller Reaction {roller_label} (kN)",
+                        label=roller_label,
                         unit="kN",
                         value_type="numeric",
                     ),
@@ -312,7 +443,7 @@ class RigidBodyGenerator:
                 answer_schema.append(
                     AnswerFieldSpec(
                         field_id=field_id,
-                        label=f"Roller Reaction {support_names[i]}{axis} (kN)",
+                        label=f"{support_names[i]}{axis}",
                         unit="kN",
                         value_type="numeric",
                     )

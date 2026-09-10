@@ -1,4 +1,4 @@
-import { arrowPolygon, COLORS, MOMENT, OPACITY, TYPE } from '../shared/constants'
+import { COLORS, MOMENT, OPACITY, TYPE } from '../shared/constants'
 import MathLabel from '../shared/MathLabel'
 
 interface MomentArcProps {
@@ -31,40 +31,48 @@ export default function MomentArc({
   arcAngle,
   label,
 }: MomentArcProps) {
-  const { radius: r, arrowLength: headLen } = MOMENT
+  const { radius: r, headLength, headHalfWidth } = MOMENT
   const sweep = Math.min(Math.max(arcAngle, MOMENT.minSweepDeg), MOMENT.maxSweepDeg)
-  const startRad = toRad(arrowAngle - sweep / 2)
-  const endRad = toRad(arrowAngle + sweep / 2)
   const ccw = direction >= 0
+  const turn = ccw ? 1 : -1
 
   const on = (rad: number): [number, number] => [x + r * Math.cos(rad), y + r * Math.sin(rad)]
-  const [startX, startY] = on(startRad)
-  const [endX, endY] = on(endRad)
 
-  const largeArc = sweep > 180 ? 1 : 0
+  // The arc runs from its trailing end round to the tip, so `turn` alone fixes
+  // which physical end the arrowhead lands on.
+  const tailRad = toRad(arrowAngle - turn * (sweep / 2))
+  const tipRad = toRad(arrowAngle + turn * (sweep / 2))
+  const [tipX, tipY] = on(tipRad)
 
-  // Draw start -> end for CCW, end -> start for CW, so the path always ends
-  // where the arrowhead goes.
-  const [fromX, fromY, toX, toY, arcFlag] = ccw
-    ? [startX, startY, endX, endY, 1]
-    : [endX, endY, startX, startY, 0]
+  // Head length as an angle, so tip and base both sit on the arc's circle and
+  // the triangle hugs the curve instead of flying off along the tangent. It can
+  // never eat more than half the sweep, however tight the generator's gap.
+  const headArcRad = Math.min(headLength / r, toRad(sweep) / 2)
+  const baseRad = tipRad - turn * headArcRad
+
+  // Stop the stroke a third of the way inside the head rather than at the tip:
+  // a round cap at the point would blunt it, but ending flush at the base would
+  // leave a hairline gap. The overlap hides under the solid fill.
+  const strokeEndRad = tipRad - turn * headArcRad * (2 / 3)
+  const [fromX, fromY] = on(tailRad)
+  const [toX, toY] = on(strokeEndRad)
+
+  const drawnSweep = sweep - (headArcRad * (2 / 3) * 180) / Math.PI
+  const largeArc = drawnSweep > 180 ? 1 : 0
+  const arcFlag = ccw ? 1 : 0
   const d = `M ${String(fromX)} ${String(fromY)} A ${String(r)} ${String(r)} 0 ${String(largeArc)} ${String(arcFlag)} ${String(toX)} ${String(toY)}`
 
-  // Tangent at the tip, in the direction of travel: the radial unit vector
-  // turned a quarter turn the way the arc sweeps.
-  const tipRad = ccw ? endRad : startRad
-  const turn = ccw ? 1 : -1
-  const tanX = -turn * Math.sin(tipRad)
-  const tanY = turn * Math.cos(tipRad)
-
-  const tailX = toX - tanX * headLen
-  const tailY = toY - tanY * headLen
-  const arrowPts = arrowPolygon(headLen)
-    .map(([along, across]) => {
-      const wx = tailX + along * tanX + across * -tanY
-      const wy = tailY + along * tanY + across * tanX
-      return `${String(wx)},${String(wy)}`
-    })
+  // Solid triangle: tip on the arc, base straddling it radially one head-length
+  // back round the curve.
+  const [baseX, baseY] = on(baseRad)
+  const outX = Math.cos(baseRad)
+  const outY = Math.sin(baseRad)
+  const arrowPts = [
+    [tipX, tipY],
+    [baseX + outX * headHalfWidth, baseY + outY * headHalfWidth],
+    [baseX - outX * headHalfWidth, baseY - outY * headHalfWidth],
+  ]
+    .map(([px, py]) => `${String(px)},${String(py)}`)
     .join(' ')
 
   const labelDistance = r + MOMENT.labelGap

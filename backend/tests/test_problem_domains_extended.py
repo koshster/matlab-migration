@@ -21,8 +21,13 @@ def test_rigid_body_generator_contract() -> None:
     assert [p.name for p in gen.params_schema] == [
         "support_case",
         "num_loads",
-        "num_moments",
+        "load_direction",
+        "min_force",
         "max_force",
+        "num_moments",
+        "moment_direction",
+        "min_moment",
+        "max_moment",
     ]
 
     # Generate

@@ -711,6 +711,11 @@ export interface components {
         RosterEntryUpdateRequest: {
             status: components["schemas"]["RosterEntryStatus"];
         };
+        /** @description One selectable value for a knob whose range is a closed set of choices. Values stay numeric so a problem slot's `params` remains a flat number-valued object; the label is display only. */
+        ParamOption: {
+            value: number;
+            label: string;
+        };
         /** @description One configurable generator knob, described so a UI can render it */
         ParamFieldSpec: {
             /** @description Key written into the problem slot's params */
@@ -724,6 +729,8 @@ export interface components {
             maximum: number | null;
             step: number | null;
             helpText: string;
+            /** @description When present, the knob is a closed choice list and the builder renders a select instead of a free numeric input. */
+            options: components["schemas"]["ParamOption"][] | null;
         };
         ProblemTypeInfo: {
             /**

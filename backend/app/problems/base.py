@@ -80,6 +80,18 @@ class GradingResult(BaseModel):
     )
 
 
+class ParamOption(BaseModel):
+    """One selectable value for a knob whose range is a fixed set of choices.
+
+    Values stay numeric so `assignment_problems.params` remains a flat
+    number-valued JSON object -- the label exists only so the builder can show
+    "Downward only" instead of the bare code the generator switches on.
+    """
+
+    value: float = Field(..., description="Value stored in the problem slot's params")
+    label: str = Field(..., description="Human readable choice shown to the instructor")
+
+
 class ParamFieldSpec(BaseModel):
     """One configurable generator knob, described so a UI can render it.
 
@@ -97,6 +109,13 @@ class ParamFieldSpec(BaseModel):
     maximum: float | None = Field(default=None)
     step: float | None = Field(default=None)
     help_text: str = Field(default="", description="Short explanation for the instructor")
+    options: list[ParamOption] | None = Field(
+        default=None,
+        description=(
+            "When set, the knob is a closed choice list and the UI renders a "
+            "select rather than a free numeric input"
+        ),
+    )
 
 
 @runtime_checkable

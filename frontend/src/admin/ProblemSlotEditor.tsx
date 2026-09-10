@@ -255,6 +255,40 @@ function ParamInput({
   value: number
   onChange: (value: number) => void
 }) {
+  // A knob whose range is a closed set of choices arrives with labelled
+  // options, so the builder shows "Downward only" rather than the bare 3 the
+  // generator switches on. Values stay numeric either way, which keeps the
+  // slot's params a flat number map and keeps this component generic.
+  const options = field.options
+  if (options && options.length > 0) {
+    // A stored slot can hold a value outside the catalogue — a ramp preset
+    // writes joint counts into whichever knob comes first, and an assignment
+    // saved before an option was retired keeps its old code. Surfacing it as an
+    // extra choice beats a silently blank select that saves a value the
+    // instructor never picked.
+    const known = options.some((option) => option.value === value)
+    return (
+      <label className="flex w-44 flex-col gap-1">
+        <span className="text-xs font-medium text-gray-600" title={field.helpText}>
+          {field.label}
+        </span>
+        <select
+          value={value}
+          aria-label={field.label}
+          onChange={(e) => { onChange(Number(e.target.value)) }}
+          className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+          {!known && <option value={value}>{`Unknown (${String(value)})`}</option>}
+        </select>
+      </label>
+    )
+  }
+
   return (
     <label className="flex w-28 flex-col gap-1">
       <span className="text-xs font-medium text-gray-600" title={field.helpText}>

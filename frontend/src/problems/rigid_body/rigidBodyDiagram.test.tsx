@@ -87,34 +87,108 @@ describe('RigidBodyDiagram', () => {
       }
     })
 
-    it.each(Object.entries(fixtures))('keeps support letters off the body: %s', (_name, geometry) => {
-      // The letters used to be pushed 1.15a out along the support base, which
-      // put them through the body or outside the frame. Every letter has to
-      // clear every bar by half the bar plus half the letter.
-      const svg = draw(geometry)
-      const clearance = GEOM.bodyHalfWidth + TYPE.supportLabel * 0.6
+    it('gives the couple arc a head wide enough to show which way it turns', () => {
+      // The head was `arrowPolygon(0.22)`, whose head half-width worked out at
+      // 0.018a -- narrower than the 0.045a arc stroke, so it disappeared into
+      // the line and the couple read as an undirected curve.
+      const svg = draw(fixtures.with_moments)
+      const heads = [...svg.querySelectorAll(`polygon[fill="${COLORS.force}"]`)].map((p) =>
+        (p.getAttribute('points') ?? '').split(' ').map((pt) => {
+          const [x, y] = pt.split(',').map(Number)
+          return { x, y }
+        }),
+      )
+      // Point loads draw 7-gons; the couple heads are the 3-point ones.
+      const triangles = heads.filter((pts) => pts.length === 3)
+      expect(triangles).toHaveLength(2)
 
-      const letters = [...svg.querySelectorAll(`text[fill="${COLORS.outline}"]`)].flatMap((t) => {
-        const transform = t.parentElement?.getAttribute('transform') ?? ''
-        const m = /translate\((-?[\d.]+),(-?[\d.]+)\)/.exec(transform)
-        return m ? [{ x: Number(m[1]), y: Number(m[2]) }] : []
-      })
-      expect(letters.length).toBeGreaterThan(0)
-
-      const bars = [...svg.querySelectorAll('polyline')].flatMap((line) => {
-        const pts = (line.getAttribute('points') ?? '')
-          .split(' ')
-          .map((p) => p.split(',').map(Number))
-          .map(([x, y]) => ({ x, y }))
-        return pts.slice(1).map((to, i) => ({ from: pts[i], to }))
-      })
-
-      for (const letter of letters) {
-        for (const bar of bars) {
-          expect(distanceToSegment(letter, bar)).toBeGreaterThanOrEqual(clearance)
-        }
+      for (const [tip, left, right] of triangles) {
+        const width = Math.hypot(left.x - right.x, left.y - right.y)
+        expect(width).toBeGreaterThan(MOMENT.strokeWidth * 3)
+        expect(width).toBeCloseTo(MOMENT.headHalfWidth * 2, 10)
+        // Tip on the arc, base straddling it, so the head hugs the curve
+        // rather than shooting off along the tangent.
+        const mid = { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 }
+        expect(Math.hypot(tip.x - mid.x, tip.y - mid.y)).toBeGreaterThan(width / 2)
       }
     })
+
+    it('points the head the way the couple rotates, and leaves no blunt cap', () => {
+      const heading = (direction: number): number => {
+        const svg = draw({
+          schemaVersion: 1,
+          elements: [
+            {
+              element_type: 'moment',
+              properties: { position: [0, 0], direction, arrow_angle: 0, arc_angle: 120 },
+            },
+          ],
+        })
+        const pts = (svg.querySelector('polygon')?.getAttribute('points') ?? '')
+          .split(' ')
+          .map((pt) => pt.split(',').map(Number))
+        expect(pts).toHaveLength(3)
+        const [[tipX, tipY], [lx, ly], [rx, ry]] = pts
+        // Positive means the tip leads counter-clockwise of its own base.
+        const midX = (lx + rx) / 2
+        const midY = (ly + ry) / 2
+        return midX * tipY - midY * tipX
+      }
+      expect(heading(1)).toBeGreaterThan(0)
+      expect(heading(-1)).toBeLessThan(0)
+
+      // The stroke has to stop short of the tip or its round cap pokes out.
+      const svg = draw({
+        schemaVersion: 1,
+        elements: [
+          {
+            element_type: 'moment',
+            properties: { position: [0, 0], direction: 1, arc_angle: 120, arrow_angle: 0 },
+          },
+        ],
+      })
+      const d = svg.querySelector(`path[stroke="${COLORS.force}"]`)?.getAttribute('d') ?? ''
+      const end = /A [\d.]+ [\d.]+ 0 \d \d (-?[\d.e-]+) (-?[\d.e-]+)/.exec(d)
+      expect(end).not.toBeNull()
+      const tip = (svg.querySelector('polygon')?.getAttribute('points') ?? '')
+        .split(' ')[0]
+        .split(',')
+        .map(Number)
+      const gap = Math.hypot(Number(end?.[1]) - tip[0], Number(end?.[2]) - tip[1])
+      expect(gap).toBeGreaterThan(MOMENT.strokeWidth / 2)
+    })
+
+    it.each(Object.entries(fixtures))(
+      'keeps support letters off the body: %s',
+      (_name, geometry) => {
+        // The letters used to be pushed 1.15a out along the support base, which
+        // put them through the body or outside the frame. Every letter has to
+        // clear every bar by half the bar plus half the letter.
+        const svg = draw(geometry)
+        const clearance = GEOM.bodyHalfWidth + TYPE.supportLabel * 0.6
+
+        const letters = [...svg.querySelectorAll(`text[fill="${COLORS.outline}"]`)].flatMap((t) => {
+          const transform = t.parentElement?.getAttribute('transform') ?? ''
+          const m = /translate\((-?[\d.]+),(-?[\d.]+)\)/.exec(transform)
+          return m ? [{ x: Number(m[1]), y: Number(m[2]) }] : []
+        })
+        expect(letters.length).toBeGreaterThan(0)
+
+        const bars = [...svg.querySelectorAll('polyline')].flatMap((line) => {
+          const pts = (line.getAttribute('points') ?? '')
+            .split(' ')
+            .map((p) => p.split(',').map(Number))
+            .map(([x, y]) => ({ x, y }))
+          return pts.slice(1).map((to, i) => ({ from: pts[i], to }))
+        })
+
+        for (const letter of letters) {
+          for (const bar of bars) {
+            expect(distanceToSegment(letter, bar)).toBeGreaterThanOrEqual(clearance)
+          }
+        }
+      },
+    )
   })
 
   it.each(Object.entries(fixtures))('fits the whole body in view: %s', (_name, geometry) => {
@@ -219,7 +293,16 @@ describe('RigidBodyDiagram', () => {
       const svg = draw({
         schemaVersion: 1,
         elements: [
-          { element_type: 'rigid_body_path', properties: { path: [[0, 0], [1, 0], [1, 1]] } },
+          {
+            element_type: 'rigid_body_path',
+            properties: {
+              path: [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+              ],
+            },
+          },
           { element_type: 'pin', properties: { position: 'not-a-point', rotation: 0 } },
           { element_type: 'point_load', properties: { position: [1, 1], force_vector: null } },
         ],
@@ -233,7 +316,17 @@ describe('RigidBodyDiagram', () => {
     it('does not divide by zero on a degenerate body', () => {
       const svg = draw({
         schemaVersion: 1,
-        elements: [{ element_type: 'rigid_body_path', properties: { path: [[2, 2], [2, 2]] } }],
+        elements: [
+          {
+            element_type: 'rigid_body_path',
+            properties: {
+              path: [
+                [2, 2],
+                [2, 2],
+              ],
+            },
+          },
+        ],
       })
       for (const value of viewBox(svg)) expect(Number.isFinite(value)).toBe(true)
     })

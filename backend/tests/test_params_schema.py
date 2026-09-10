@@ -36,6 +36,26 @@ def test_every_registered_generator_declares_a_catalogue_entry() -> None:
             assert field.value_type in ("integer", "number")
 
 
+def test_choice_knobs_declare_options_the_generator_actually_accepts() -> None:
+    """A knob with `options` renders as a select, so the builder can only ever
+    submit one of those values -- they must all be in range and the default must
+    be selectable, or the form opens showing a blank choice."""
+    for generator in problem_registry.all():
+        for field in generator.params_schema:
+            if field.options is None:
+                continue
+            assert field.options, f"{generator.problem_type}.{field.name}: empty option list"
+            values = [o.value for o in field.options]
+            assert len(values) == len(set(values)), f"{field.name}: duplicate option values"
+            assert field.default in values, f"{field.name}: default is not one of its options"
+            for option in field.options:
+                assert option.label
+                if field.minimum is not None:
+                    assert option.value >= field.minimum
+                if field.maximum is not None:
+                    assert option.value <= field.maximum
+
+
 def test_every_declared_knob_has_a_default_so_an_untouched_form_works() -> None:
     """An instructor who ignores the difficulty form must still get a problem."""
     for generator in problem_registry.all():

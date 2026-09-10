@@ -124,8 +124,18 @@ export const TYPE = {
 export const MOMENT = {
   radius: 0.3,
   strokeWidth: 0.045,
-  /** Arrowhead length; a shade under half the arrow-force head so it reads as a tip. */
-  arrowLength: 0.22,
+  /**
+   * Arrowhead of the couple arc, drawn as a solid triangle rather than a
+   * scaled copy of the straight-force 7-gon. DEVIATION: the head used to be
+   * `arrowPolygon(0.22)`, whose head half-width came out at 0.018a — narrower
+   * than the 0.045a arc stroke it sits on, so the tip vanished into the line
+   * and the arc read as a plain curve with no direction. Sized off the stroke
+   * instead: ~4x as wide, so the sense of rotation is legible at 288px.
+   * `headLength` is measured along the arc, not along the tangent, so the head
+   * stays inscribed on the circle.
+   */
+  headLength: 0.24,
+  headHalfWidth: 0.095,
   /** Label clearance past the arc, along the arc's bisector. */
   labelGap: 0.42,
   /** Guard rails on the generator's sweep so the arc always has a visible gap. */

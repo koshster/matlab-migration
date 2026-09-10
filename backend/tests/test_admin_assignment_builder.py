@@ -91,6 +91,62 @@ async def test_problem_types_catalogue_lists_all_generators(admin_client: AsyncC
 
 
 @pytest.mark.asyncio
+async def test_problem_types_catalogue_matches_the_contract_field_names(
+    admin_client: AsyncClient,
+) -> None:
+    """The response used to send `type` where ParamFieldSpec declares
+    `valueType`, so the builder never saw it and fell back to a free-step input."""
+    resp = await admin_client.get("/api/v1/admin/problem-types")
+    contract_keys = {
+        "name",
+        "label",
+        "valueType",
+        "default",
+        "minimum",
+        "maximum",
+        "step",
+        "helpText",
+        "options",
+    }
+    for info in resp.json():
+        for field in info["paramsSchema"]:
+            assert set(field) == contract_keys, f"{info['problemType']}.{field['name']}"
+            assert field["valueType"] in ("integer", "number")
+
+
+@pytest.mark.asyncio
+async def test_rigid_body_load_direction_and_magnitude_are_offered_as_knobs(
+    admin_client: AsyncClient,
+) -> None:
+    """Direction and magnitude of loads is a design-deck parameterization axis,
+    so the builder must be able to set both without knowing what a rigid body is."""
+    resp = await admin_client.get("/api/v1/admin/problem-types")
+    info = next(t for t in resp.json() if t["problemType"] == "rigid_body")
+    by_name = {p["name"]: p for p in info["paramsSchema"]}
+
+    assert {"min_force", "max_force", "min_moment", "max_moment"} <= set(by_name)
+
+    # Direction knobs arrive as labelled choices so the builder renders a select
+    # rather than asking an instructor to type the numeric code.
+    force_dir = by_name["load_direction"]
+    assert [o["label"] for o in force_dir["options"]] == [
+        "Any direction",
+        "Vertical only",
+        "Horizontal only",
+        "Downward only",
+    ]
+    moment_dir = by_name["moment_direction"]
+    assert [o["label"] for o in moment_dir["options"]] == [
+        "Either sense",
+        "Counterclockwise",
+        "Clockwise",
+    ]
+
+    # A plain numeric knob must still say it has no choice list.
+    assert by_name["max_force"]["options"] is None
+
+
+@pytest.mark.asyncio
 async def test_create_assignment_with_custom_problem_count_and_types(
     admin_client: AsyncClient,
 ) -> None:

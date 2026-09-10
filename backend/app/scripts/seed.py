@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 
@@ -19,6 +20,15 @@ from app.db.models import (
     Submission,
 )
 from app.db.session import async_session_factory
+from app.problems.rigid_body.loads import (
+    FORCE_DIRECTION_ANY,
+    FORCE_DIRECTION_DOWNWARD,
+    FORCE_DIRECTION_HORIZONTAL,
+    FORCE_DIRECTION_VERTICAL,
+    MOMENT_DIRECTION_ANY,
+    MOMENT_DIRECTION_CCW,
+    MOMENT_DIRECTION_CW,
+)
 
 
 async def seed() -> None:
@@ -78,6 +88,9 @@ async def seed() -> None:
         async def get_or_create_assignment(
             slug: str,
             title: str,
+            instructions: str,
+            problem_type: str,
+            problem_slots: list[dict[str, Any]],
             due_at: datetime | None = None,
         ) -> tuple[Assignment, list[AssignmentProblem]]:
             assignment_row = await db.execute(select(Assignment).where(Assignment.slug == slug))
@@ -87,7 +100,7 @@ async def seed() -> None:
                     course_id=course.id,
                     slug=slug,
                     title=title,
-                    instructions="Determine the internal force in each truss member.",
+                    instructions=instructions,
                     tolerance=0.01,
                     feedback_mode="per_field",
                     max_attempts=None,
@@ -98,15 +111,14 @@ async def seed() -> None:
                 )
                 db.add(a)
                 await db.flush()
-                node_counts = [3, 3, 4, 4, 5, 5, 6, 6]
-                for i, n in enumerate(node_counts):
+                for i, slot in enumerate(problem_slots):
                     db.add(
                         AssignmentProblem(
                             assignment_id=a.id,
-                            problem_type="truss",
+                            problem_type=problem_type,
                             order_index=i,
                             points=1.0,
-                            params={"num_nodes": n, "max_force": 5, "load_count": 2},
+                            params=slot,
                         )
                     )
                 await db.flush()
@@ -127,19 +139,149 @@ async def seed() -> None:
             problems = list(problem_rows.scalars().all())
             return a, problems
 
+        truss_slots = [
+            {"num_nodes": n, "max_force": 5, "load_count": 2}
+            for n in [3, 3, 4, 4, 5, 5, 6, 6]
+        ]
+        # 8 rigid-body problems: cycle support_case 1→2→3 to exercise all three
+        # support types (rollers / pin+roller / cantilever wall), escalating loads.
+        rigid_body_slots = [
+            {"support_case": 2, "num_loads": 1, "num_moments": 0, "max_force": 3},
+            {"support_case": 1, "num_loads": 1, "num_moments": 0, "max_force": 3},
+            {"support_case": 3, "num_loads": 1, "num_moments": 0, "max_force": 3},
+            {"support_case": 2, "num_loads": 2, "num_moments": 0, "max_force": 5},
+            {"support_case": 1, "num_loads": 2, "num_moments": 1, "max_force": 5},
+            {"support_case": 3, "num_loads": 2, "num_moments": 1, "max_force": 5},
+            {"support_case": 2, "num_loads": 3, "num_moments": 1, "max_force": 8},
+            {"support_case": 1, "num_loads": 3, "num_moments": 2, "max_force": 8},
+        ]
+
+        # One slot per load-configuration knob combination, so the effect of
+        # `load_direction` / magnitude range is visible by paging between
+        # problems instead of by re-rolling seeds. Equal min/max bounds pin
+        # every load to one magnitude, which is what makes each slot legible.
+        load_config_slots = [
+            # 1. Gravity-style: every arrow points down, every label reads 3F.
+            {
+                "support_case": 2,
+                "num_loads": 2,
+                "load_direction": FORCE_DIRECTION_DOWNWARD,
+                "min_force": 3,
+                "max_force": 3,
+                "num_moments": 0,
+            },
+            # 2. Same supports, horizontal loads only, all 2F.
+            {
+                "support_case": 2,
+                "num_loads": 2,
+                "load_direction": FORCE_DIRECTION_HORIZONTAL,
+                "min_force": 2,
+                "max_force": 2,
+                "num_moments": 0,
+            },
+            # 3. Vertical only -- up or down, unlike slot 1 -- all 4F.
+            {
+                "support_case": 2,
+                "num_loads": 2,
+                "load_direction": FORCE_DIRECTION_VERTICAL,
+                "min_force": 4,
+                "max_force": 4,
+                "num_moments": 0,
+            },
+            # 4. The unconstrained default over a wide magnitude range.
+            {
+                "support_case": 2,
+                "num_loads": 3,
+                "load_direction": FORCE_DIRECTION_ANY,
+                "min_force": 1,
+                "max_force": 9,
+                "num_moments": 0,
+            },
+            # 5. The deck's slide-3 figure: three rollers, one horizontal F,
+            #    one 4Fa couple.
+            {
+                "support_case": 1,
+                "num_loads": 1,
+                "load_direction": FORCE_DIRECTION_HORIZONTAL,
+                "min_force": 1,
+                "max_force": 1,
+                "num_moments": 1,
+                "moment_direction": MOMENT_DIRECTION_ANY,
+                "min_moment": 4,
+                "max_moment": 4,
+            },
+            # 6. Couples clockwise only, all 2Fa.
+            {
+                "support_case": 1,
+                "num_loads": 1,
+                "load_direction": FORCE_DIRECTION_DOWNWARD,
+                "min_force": 2,
+                "max_force": 2,
+                "num_moments": 2,
+                "moment_direction": MOMENT_DIRECTION_CW,
+                "min_moment": 2,
+                "max_moment": 2,
+            },
+            # 7. Couples counterclockwise only, all 5Fa.
+            {
+                "support_case": 2,
+                "num_loads": 1,
+                "load_direction": FORCE_DIRECTION_DOWNWARD,
+                "min_force": 2,
+                "max_force": 2,
+                "num_moments": 1,
+                "moment_direction": MOMENT_DIRECTION_CCW,
+                "min_moment": 5,
+                "max_moment": 5,
+            },
+            # 8. Cantilever wall carrying gravity-style loads only.
+            {
+                "support_case": 3,
+                "num_loads": 3,
+                "load_direction": FORCE_DIRECTION_DOWNWARD,
+                "min_force": 1,
+                "max_force": 4,
+                "num_moments": 0,
+            },
+        ]
+
         a1, a1_probs = await get_or_create_assignment(
             "truss-fall-2026",
             "Truss Analysis — Fall 2026",
+            "Determine the internal force in each truss member.",
+            "truss",
+            truss_slots,
             due_at=datetime(2026, 12, 15, 23, 59, tzinfo=UTC),
         )
         a2, _ = await get_or_create_assignment(
             "truss-quiz-week8",
             "Truss Review Quiz — Week 8",
+            "Determine the internal force in each truss member.",
+            "truss",
+            truss_slots,
             due_at=datetime(2026, 10, 30, 23, 59, tzinfo=UTC),
         )
         a3, a3_probs = await get_or_create_assignment(
             "truss-practice-final",
             "Final Exam Practice",
+            "Determine the internal force in each truss member.",
+            "truss",
+            truss_slots,
+        )
+        a4, _ = await get_or_create_assignment(
+            "rigid-body-fall-2026",
+            "Rigid Body Equilibrium — Fall 2026",
+            "Determine the support reactions for the given rigid body.",
+            "rigid_body",
+            rigid_body_slots,
+            due_at=datetime(2026, 12, 15, 23, 59, tzinfo=UTC),
+        )
+        a5, _ = await get_or_create_assignment(
+            "rigid-body-load-directions",
+            "Rigid Body — Load Direction & Magnitude",
+            "Determine the support reactions for the given rigid body.",
+            "rigid_body",
+            load_config_slots,
         )
 
         # ------------------------------------------------------------------
@@ -298,6 +440,48 @@ async def seed() -> None:
                 )
             await db.flush()
             print("Seeded submissions for truss-practice-final (submitted 6/8)")
+
+        # ------------------------------------------------------------------
+        # StudentAssignment 4: rigid-body-fall-2026 -> not started (just enrolled)
+        # ------------------------------------------------------------------
+        sa4_row = await db.execute(
+            select(StudentAssignment).where(
+                StudentAssignment.student_id == student.id,
+                StudentAssignment.assignment_id == a4.id,
+            )
+        )
+        if sa4_row.scalar_one_or_none() is None:
+            db.add(
+                StudentAssignment(
+                    student_id=student.id,
+                    assignment_id=a4.id,
+                    seed=77,
+                    draft_answers={},
+                )
+            )
+            await db.flush()
+            print("Seeded rigid-body-fall-2026 for demo001 (not_started)")
+
+        # ------------------------------------------------------------------
+        # StudentAssignment 5: rigid-body-load-directions -> not started
+        # ------------------------------------------------------------------
+        sa5_row = await db.execute(
+            select(StudentAssignment).where(
+                StudentAssignment.student_id == student.id,
+                StudentAssignment.assignment_id == a5.id,
+            )
+        )
+        if sa5_row.scalar_one_or_none() is None:
+            db.add(
+                StudentAssignment(
+                    student_id=student.id,
+                    assignment_id=a5.id,
+                    seed=2026,
+                    draft_answers={},
+                )
+            )
+            await db.flush()
+            print("Seeded rigid-body-load-directions for demo001 (not_started)")
 
         await db.commit()
         print("Seed complete.")

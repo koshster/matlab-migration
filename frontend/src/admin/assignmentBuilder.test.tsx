@@ -101,6 +101,100 @@ describe('assignment builder', () => {
     expect(screen.queryByLabelText('Joints')).toBeNull()
   })
 
+  it('renders a knob with a closed choice list as a labelled select', async () => {
+    // Direction of loads is a set of choices, not a number an instructor should
+    // have to look up — the catalogue says so and the form obeys, with no
+    // problem-type knowledge in admin/.
+    server.use(
+      http.get(`${BASE}/admin/problem-types`, () =>
+        HttpResponse.json([
+          {
+            problemType: 'truss',
+            displayName: 'Planar truss',
+            paramsSchema: [
+              {
+                name: 'load_direction',
+                label: 'Force direction',
+                valueType: 'integer',
+                default: 0,
+                minimum: 0,
+                maximum: 3,
+                step: 1,
+                helpText: 'Restricts which cardinal directions point loads may take.',
+                options: [
+                  { value: 0, label: 'Any direction' },
+                  { value: 1, label: 'Vertical only' },
+                  { value: 2, label: 'Horizontal only' },
+                  { value: 3, label: 'Downward only' },
+                ],
+              },
+            ],
+          },
+        ]),
+      ),
+    )
+    const user = userEvent.setup()
+    openBuilder(DRAFT)
+    await screen.findByText(/3 problems/)
+
+    const selects = screen.getAllByLabelText<HTMLSelectElement>('Force direction')
+    expect(selects.length).toBe(3)
+    expect(selects[0].tagName).toBe('SELECT')
+    expect(
+      within(selects[0]).getAllByRole('option').map((o) => o.textContent),
+    ).toEqual(['Any direction', 'Vertical only', 'Horizontal only', 'Downward only'])
+
+    // The numeric code, not the label, is what gets stored in the slot params.
+    await user.selectOptions(selects[0], '3')
+    expect(selects[0].value).toBe('3')
+    expect(screen.getAllByLabelText<HTMLSelectElement>('Force direction')[1].value).toBe('0')
+  })
+
+  it('surfaces a stored choice value the catalogue no longer offers', async () => {
+    // The ramp presets write joint counts into whichever knob the catalogue
+    // lists first, which for a choice knob is out of range. A blank select
+    // would silently save a value nobody picked.
+    server.use(
+      http.get(`${BASE}/admin/problem-types`, () =>
+        HttpResponse.json([
+          {
+            problemType: 'truss',
+            displayName: 'Planar truss',
+            paramsSchema: [
+              {
+                name: 'support_case',
+                label: 'Support Configuration',
+                valueType: 'integer',
+                default: 2,
+                minimum: 1,
+                maximum: 3,
+                step: 1,
+                helpText: 'Boundary conditions holding the body in equilibrium.',
+                options: [
+                  { value: 1, label: '3 Rollers' },
+                  { value: 2, label: 'Pin + Roller' },
+                  { value: 3, label: 'Fixed Cantilever Wall' },
+                ],
+              },
+            ],
+          },
+        ]),
+      ),
+    )
+    const user = userEvent.setup()
+    openBuilder(DRAFT)
+    await screen.findByText(/3 problems/)
+
+    await user.click(screen.getByRole('button', { name: /Standard \(8\)/ }))
+    await screen.findByText(/8 problems/)
+
+    const selects = screen.getAllByLabelText<HTMLSelectElement>('Support Configuration')
+    // The ramp wrote 3,3,4,4,5,5,6,6 — 3 is a real choice, 4 upwards is not.
+    expect(selects[0].value).toBe('3')
+    expect(selects[2].value).toBe('4')
+    expect(within(selects[2]).getByRole('option', { name: 'Unknown (4)' })).toBeInTheDocument()
+  })
+
   it('applies a difficulty ramp preset', async () => {
     const user = userEvent.setup()
     openBuilder(DRAFT)

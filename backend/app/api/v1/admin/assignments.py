@@ -53,12 +53,19 @@ async def list_problem_types(
                     {
                         "name": s.name,
                         "label": s.label,
-                        "type": s.value_type,
+                        # Contract key is `valueType`; this used to emit `type`,
+                        # so the builder never saw it and fell back to step="any".
+                        "valueType": s.value_type,
                         "default": s.default,
                         "minimum": s.minimum,
                         "maximum": s.maximum,
                         "step": s.step,
                         "helpText": s.help_text,
+                        "options": (
+                            [{"value": o.value, "label": o.label} for o in s.options]
+                            if s.options
+                            else None
+                        ),
                     }
                     for s in gen.params_schema
                 ],

@@ -9,7 +9,10 @@ This test suite validates:
 6. Physics equilibrium satisfaction (sum(Fx) = 0, sum(Fy) = 0, sum(Mo) = 0 for all cases).
 7. Student grading logic (evaluation within 1% relative tolerance, partial credit, error handling).
 8. Textbook analytical problem solutions matching legacy MATLAB benchmarks.
+9. Instructor-configurable load direction and magnitude range.
 """
+
+from typing import Any
 
 import numpy as np
 import pytest
@@ -18,6 +21,15 @@ from app.problems.base import AnswerSubmission
 from app.problems.registry import problem_registry
 from app.problems.rigid_body.generator import rigid_body_generator
 from app.problems.rigid_body.geometry import collapse_nodes, generate_body_path
+from app.problems.rigid_body.loads import (
+    FORCE_DIRECTION_ANY,
+    FORCE_DIRECTION_DOWNWARD,
+    FORCE_DIRECTION_HORIZONTAL,
+    FORCE_DIRECTION_VERTICAL,
+    MOMENT_DIRECTION_ANY,
+    MOMENT_DIRECTION_CCW,
+    MOMENT_DIRECTION_CW,
+)
 from app.problems.rigid_body.solver import solve_rigid_body_reactions
 from app.problems.rigid_body.supports import is_support_configuration_invalid
 
@@ -212,3 +224,213 @@ def test_matlab_regression_known_system_solve() -> None:
     assert np.isclose(res["Ax"], 0.0)
     assert np.isclose(res["Ay"], 5.0)
     assert np.isclose(res["By"], 5.0)
+
+
+# ---------------------------------------------------------------------------
+# Instructor-configurable load direction and magnitude
+#
+# The design deck lists "Directions and Magnitudes of Loads" as a
+# parameterization axis alongside the number and placement of loads, so both
+# are knobs rather than fixed generator behaviour.
+# ---------------------------------------------------------------------------
+
+SEEDS = range(1, 25)
+
+
+def _forces(seed: int, params: dict[str, object]) -> list[dict[str, Any]]:
+    display = rigid_body_generator.generate(seed, params=dict(params))
+    return [el.properties for el in display.visual_schema if el.element_type == "point_load"]
+
+
+def _moments(seed: int, params: dict[str, object]) -> list[dict[str, Any]]:
+    display = rigid_body_generator.generate(seed, params=dict(params))
+    return [el.properties for el in display.visual_schema if el.element_type == "moment"]
+
+
+def test_declared_defaults_reproduce_the_generators_own_behaviour() -> None:
+    """An instructor who never touches the difficulty form must get the same
+    problem as one who saves every default explicitly."""
+    defaults = {f.name: f.default for f in rigid_body_generator.params_schema}
+    for seed in SEEDS:
+        explicit = rigid_body_generator.generate(seed, params=defaults)
+        implicit = rigid_body_generator.generate(seed)
+        assert explicit.model_dump() == implicit.model_dump()
+
+
+def test_load_direction_vertical_only() -> None:
+    seen_up = seen_down = False
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 4, "load_direction": FORCE_DIRECTION_VERTICAL}):
+            fx, fy = f["force_vector"]
+            assert fx == 0.0, f"seed {seed}: vertical-only load has fx={fx}"
+            assert fy != 0.0
+            seen_up |= fy > 0
+            seen_down |= fy < 0
+    # Both senses stay reachable -- "vertical" constrains the axis, not the sign.
+    assert seen_up and seen_down
+
+
+def test_load_direction_horizontal_only() -> None:
+    seen_left = seen_right = False
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 4, "load_direction": FORCE_DIRECTION_HORIZONTAL}):
+            fx, fy = f["force_vector"]
+            assert fy == 0.0, f"seed {seed}: horizontal-only load has fy={fy}"
+            assert fx != 0.0
+            seen_left |= fx < 0
+            seen_right |= fx > 0
+    assert seen_left and seen_right
+
+
+def test_load_direction_downward_only() -> None:
+    total = 0
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 4, "load_direction": FORCE_DIRECTION_DOWNWARD}):
+            fx, fy = f["force_vector"]
+            assert fx == 0.0
+            assert fy < 0.0, f"seed {seed}: downward-only load has fy={fy}"
+            total += 1
+    assert total > 0
+
+
+def test_load_direction_any_produces_both_axes() -> None:
+    """The default must stay unconstrained, otherwise the knob's neutral setting
+    would silently narrow existing assignments."""
+    axes = set()
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 4, "load_direction": FORCE_DIRECTION_ANY}):
+            fx, fy = f["force_vector"]
+            axes.add("x" if fx != 0.0 else "y")
+    assert axes == {"x", "y"}
+
+
+@pytest.mark.parametrize(("min_force", "max_force"), [(1, 5), (3, 3), (2, 4), (7, 12)])
+def test_force_magnitudes_stay_inside_the_configured_range(min_force: int, max_force: int) -> None:
+    seen: set[float] = set()
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 4, "min_force": min_force, "max_force": max_force}):
+            mag = f["magnitude"]
+            fx, fy = f["force_vector"]
+            assert min_force <= mag <= max_force, f"seed {seed}: magnitude {mag} out of range"
+            # The drawn vector and the label must agree with the magnitude.
+            assert abs(fx) + abs(fy) == mag
+            seen.add(mag)
+    assert seen
+    if min_force == max_force:
+        assert seen == {float(min_force)}
+
+
+def test_equal_force_bounds_pin_every_load_to_one_magnitude() -> None:
+    """How an instructor asks for the deck's fixed-magnitude problems."""
+    labels = set()
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 3, "min_force": 3, "max_force": 3}):
+            labels.add(f["label"])
+    assert labels == {"3F"}
+
+
+def test_inverted_force_range_collapses_instead_of_raising() -> None:
+    """params come from a JSON column, so a nonsensical range must still render."""
+    for seed in SEEDS:
+        for f in _forces(seed, {"num_loads": 2, "min_force": 9, "max_force": 2}):
+            assert f["magnitude"] == 9.0
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [(MOMENT_DIRECTION_CCW, 1), (MOMENT_DIRECTION_CW, -1)],
+)
+def test_moment_direction_constrains_rotational_sense(mode: int, expected: int) -> None:
+    total = 0
+    for seed in SEEDS:
+        for m in _moments(seed, {"num_moments": 2, "moment_direction": mode}):
+            assert m["direction"] == expected, f"seed {seed}: got {m['direction']}"
+            total += 1
+    assert total > 0
+
+
+def test_moment_direction_any_produces_both_senses() -> None:
+    senses = set()
+    for seed in SEEDS:
+        for m in _moments(seed, {"num_moments": 2, "moment_direction": MOMENT_DIRECTION_ANY}):
+            senses.add(m["direction"])
+    assert senses == {1, -1}
+
+
+@pytest.mark.parametrize(("min_moment", "max_moment"), [(1, 5), (4, 4), (2, 8)])
+def test_moment_magnitudes_stay_inside_the_configured_range(
+    min_moment: int, max_moment: int
+) -> None:
+    seen: set[float] = set()
+    for seed in SEEDS:
+        for m in _moments(
+            seed, {"num_moments": 2, "min_moment": min_moment, "max_moment": max_moment}
+        ):
+            assert min_moment <= m["magnitude"] <= max_moment
+            seen.add(m["magnitude"])
+    assert seen
+    if min_moment == max_moment:
+        assert seen == {float(min_moment)}
+
+
+def test_unknown_direction_codes_fall_back_to_unconstrained() -> None:
+    """A slot saved against an older or hand-edited params value must not 500."""
+    for seed in SEEDS:
+        baseline = rigid_body_generator.generate(seed, params={"num_loads": 2, "num_moments": 1})
+        stale = rigid_body_generator.generate(
+            seed,
+            params={
+                "num_loads": 2,
+                "num_moments": 1,
+                "load_direction": 99,
+                "moment_direction": -7,
+            },
+        )
+        assert stale.model_dump() == baseline.model_dump()
+
+
+@pytest.mark.parametrize("support_case", [1, 2, 3])
+@pytest.mark.parametrize(
+    "load_direction",
+    [
+        FORCE_DIRECTION_ANY,
+        FORCE_DIRECTION_VERTICAL,
+        FORCE_DIRECTION_HORIZONTAL,
+        FORCE_DIRECTION_DOWNWARD,
+    ],
+)
+@pytest.mark.parametrize(
+    "moment_direction",
+    [MOMENT_DIRECTION_ANY, MOMENT_DIRECTION_CCW, MOMENT_DIRECTION_CW],
+)
+def test_every_offered_load_configuration_stays_solvable_and_gradable(
+    support_case: int, load_direction: int, moment_direction: int
+) -> None:
+    """The builder must not be able to save a load configuration that produces
+    an unsolvable problem -- constraining direction narrows the load set, and a
+    body loaded only horizontally is still in equilibrium under its reactions."""
+    for seed in range(1, 8):
+        params = {
+            "support_case": support_case,
+            "num_loads": 2,
+            "num_moments": 1,
+            "load_direction": load_direction,
+            "moment_direction": moment_direction,
+            "min_force": 2,
+            "max_force": 6,
+            "min_moment": 2,
+            "max_moment": 4,
+        }
+        display = rigid_body_generator.generate(seed, params=params)
+        ground_truth = rigid_body_generator.solve(seed, params=params)
+        reactions = ground_truth["reactions"]
+
+        # Every field the student is asked for must have a ground-truth value.
+        for field in display.answer_schema:
+            assert field.field_id in reactions, f"{field.field_id} has no solution"
+        assert all(np.isfinite(v) for v in reactions.values())
+
+        result = rigid_body_generator.check(
+            seed, AnswerSubmission(answers=dict(reactions)), params=params
+        )
+        assert result.is_passed, f"case={support_case} seed={seed} not gradable"
