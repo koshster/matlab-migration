@@ -3,6 +3,8 @@ import { describe, it, expect } from 'vitest'
 import RigidBodyDiagram from './RigidBodyDiagram'
 import { fixtures } from './fixtures'
 import { getRenderer } from '../registry'
+import { COLORS, GEOM, MOMENT, TYPE } from '../shared/constants'
+import type { Segment } from '../shared/forceShift'
 
 /**
  * Fixture provenance (see fixtures.ts):
@@ -11,6 +13,15 @@ import { getRenderer } from '../registry'
  *   cantilever_wall seed 11, support_case 3
  *   with_moments    seed  3, support_case 2, num_moments 2, num_loads 2
  */
+
+function distanceToSegment(p: { x: number; y: number }, { from, to }: Segment): number {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const lenSq = dx * dx + dy * dy
+  if (lenSq === 0) return Math.hypot(p.x - from.x, p.y - from.y)
+  const t = Math.min(Math.max(((p.x - from.x) * dx + (p.y - from.y) * dy) / lenSq, 0), 1)
+  return Math.hypot(p.x - (from.x + t * dx), p.y - (from.y + t * dy))
+}
 
 function draw(geometry: unknown): SVGSVGElement {
   const { container } = render(<RigidBodyDiagram geometry={geometry} />)
@@ -49,6 +60,61 @@ describe('RigidBodyDiagram', () => {
     const svg = draw(fixtures.three_rollers)
     const labels = [...svg.querySelectorAll('text')].map((t) => t.textContent)
     expect(labels).toEqual(expect.arrayContaining(['A', 'B', 'C']))
+  })
+
+  describe('deck styling', () => {
+    it('draws the body as a hairline-outlined pipe, not a heavy slab', () => {
+      // The deck (ppt/media/image4.png, image34.png) draws the body the same
+      // way as a truss member: lavender face, 1pt dark edge.
+      const svg = draw(fixtures.pin_roller)
+      const [edge, face] = [...svg.querySelectorAll('polyline')]
+      expect(face.getAttribute('stroke')).toBe(COLORS.member)
+      expect(Number(face.getAttribute('stroke-width'))).toBeCloseTo(GEOM.bodyHalfWidth * 2, 10)
+      expect(edge.getAttribute('stroke')).toBe(COLORS.outline)
+      expect(
+        Number(edge.getAttribute('stroke-width')) - Number(face.getAttribute('stroke-width')),
+      ).toBeCloseTo(GEOM.outlineWidth * 2, 10)
+    })
+
+    it('keeps the couple arc small enough to read as a couple', () => {
+      // It was drawn at radius 0.62a with a 0.09a stroke, twice the deck's arc,
+      // which swallowed the corner of the body it was applied to.
+      const svg = draw(fixtures.with_moments)
+      for (const arc of svg.querySelectorAll(`path[stroke="${COLORS.force}"]`)) {
+        expect(Number(arc.getAttribute('stroke-width'))).toBeCloseTo(MOMENT.strokeWidth, 10)
+        const radius = /A ([\d.]+) /.exec(arc.getAttribute('d') ?? '')?.[1]
+        expect(Number(radius)).toBeCloseTo(MOMENT.radius, 10)
+      }
+    })
+
+    it.each(Object.entries(fixtures))('keeps support letters off the body: %s', (_name, geometry) => {
+      // The letters used to be pushed 1.15a out along the support base, which
+      // put them through the body or outside the frame. Every letter has to
+      // clear every bar by half the bar plus half the letter.
+      const svg = draw(geometry)
+      const clearance = GEOM.bodyHalfWidth + TYPE.supportLabel * 0.6
+
+      const letters = [...svg.querySelectorAll(`text[fill="${COLORS.outline}"]`)].flatMap((t) => {
+        const transform = t.parentElement?.getAttribute('transform') ?? ''
+        const m = /translate\((-?[\d.]+),(-?[\d.]+)\)/.exec(transform)
+        return m ? [{ x: Number(m[1]), y: Number(m[2]) }] : []
+      })
+      expect(letters.length).toBeGreaterThan(0)
+
+      const bars = [...svg.querySelectorAll('polyline')].flatMap((line) => {
+        const pts = (line.getAttribute('points') ?? '')
+          .split(' ')
+          .map((p) => p.split(',').map(Number))
+          .map(([x, y]) => ({ x, y }))
+        return pts.slice(1).map((to, i) => ({ from: pts[i], to }))
+      })
+
+      for (const letter of letters) {
+        for (const bar of bars) {
+          expect(distanceToSegment(letter, bar)).toBeGreaterThanOrEqual(clearance)
+        }
+      }
+    })
   })
 
   it.each(Object.entries(fixtures))('fits the whole body in view: %s', (_name, geometry) => {

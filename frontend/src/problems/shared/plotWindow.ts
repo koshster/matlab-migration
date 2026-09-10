@@ -1,3 +1,5 @@
+import { MARGIN } from './constants'
+
 /**
  * plotTruss.m:135 (`focus`) — one unit of clearance past the extreme nodes,
  * snapped to the grid so the window edges land on gridlines.
@@ -7,6 +9,19 @@ export interface Window {
   xMax: number
   yMin: number
   yMax: number
+}
+
+/**
+ * The plot box plus room outside it for the tick labels. Physics y is up and
+ * SVG y is down, hence the negated origin — the scene is drawn inside a single
+ * `scale(1,-1)` group.
+ */
+export function viewBox(win: Window): string {
+  const x = win.xMin - MARGIN.left
+  const y = -(win.yMax + MARGIN.top)
+  const w = win.xMax - win.xMin + MARGIN.left + MARGIN.right
+  const h = win.yMax - win.yMin + MARGIN.top + MARGIN.bottom
+  return `${String(x)} ${String(y)} ${String(w)} ${String(h)}`
 }
 
 export function plotWindow(points: Array<{ x: number; y: number }>): Window {

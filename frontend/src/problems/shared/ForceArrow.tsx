@@ -1,6 +1,5 @@
 import { arrowPolygon, COLORS, GEOM, OPACITY, TYPE } from './constants'
-import FlipText from './FlipText'
-import { splitLabel } from './labels'
+import MathLabel from './MathLabel'
 
 interface ForceArrowProps {
   node: { x: number; y: number }
@@ -44,18 +43,20 @@ export default function ForceArrow({ node, fx, fy, label, shifted }: ForceArrowP
   const horizontal = Math.abs(ux) > Math.abs(uy)
   const anchor = horizontal ? (ux < 0 !== shifted ? 'end' : 'start') : 'middle'
 
-  const { head, unit } = splitLabel(label)
-
   return (
     <g>
       {/* Slightly transparent so a member under the shaft still reads; the
           label stays fully opaque because it has to be read exactly. */}
       <polygon points={points} fill={COLORS.force} opacity={OPACITY.force} />
       {label !== '' && (
-        <FlipText x={lx} y={ly} fontSize={TYPE.forceLabel} fill={COLORS.force} anchor={anchor}>
-          {head}
-          {unit ? <tspan fontStyle="italic">F</tspan> : null}
-        </FlipText>
+        <MathLabel
+          x={lx}
+          y={ly}
+          label={label}
+          fontSize={TYPE.forceLabel}
+          fill={COLORS.force}
+          anchor={anchor}
+        />
       )}
     </g>
   )

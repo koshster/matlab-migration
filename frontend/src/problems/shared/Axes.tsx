@@ -1,5 +1,5 @@
 import { COLORS, TYPE } from './constants'
-import FlipText from './FlipText'
+import MathLabel from './MathLabel'
 
 interface AxesProps {
   xMin: number
@@ -9,11 +9,11 @@ interface AxesProps {
 }
 
 /** plotTruss.m:92-93 — 0 stays "0", ±1 collapse to "a"/"-a", the rest get an "a" suffix. */
-function tickParts(v: number): { prefix: string; unit: boolean } {
-  if (v === 0) return { prefix: '0', unit: false }
-  if (v === 1) return { prefix: '', unit: true }
-  if (v === -1) return { prefix: '-', unit: true }
-  return { prefix: String(v), unit: true }
+function tickLabel(v: number): string {
+  if (v === 0) return '0'
+  if (v === 1) return 'a'
+  if (v === -1) return '-a'
+  return `${String(v)}a`
 }
 
 function TickLabel({
@@ -29,19 +29,16 @@ function TickLabel({
   anchor: 'middle' | 'end'
   baseline: 'middle' | 'hanging'
 }) {
-  const { prefix, unit } = tickParts(v)
   return (
-    <FlipText
+    <MathLabel
       x={x}
       y={y}
+      label={tickLabel(v)}
       fontSize={TYPE.tickLabel}
       fill={COLORS.tick}
       anchor={anchor}
       baseline={baseline}
-    >
-      {prefix}
-      {unit ? <tspan fontStyle="italic">a</tspan> : null}
-    </FlipText>
+    />
   )
 }
 

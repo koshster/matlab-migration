@@ -1,5 +1,5 @@
-import { COLORS, GEOM, TYPE } from './constants'
-import FlipText from './FlipText'
+import { COLORS, GEOM, TYPE } from '../shared/constants'
+import FlipText from '../shared/FlipText'
 import type { Placement } from './memberLabels'
 
 interface MemberProps {

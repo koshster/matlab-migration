@@ -1,64 +1,26 @@
 import { useId } from 'react'
 import Axes from '../shared/Axes'
-import { COLORS, GEOM, MARGIN } from '../shared/constants'
-import FlipText from '../shared/FlipText'
+import BodyPipes from '../shared/BodyPipes'
 import ForceArrow from '../shared/ForceArrow'
 import PinSupport from '../shared/PinSupport'
-import { plotWindow } from '../shared/plotWindow'
 import RollerSupport from '../shared/RollerSupport'
-import WallSupport from '../shared/WallSupport'
+import WallSupport, { wallBaseAngle } from '../shared/WallSupport'
+import { buildShiftRule, pathSegments } from '../shared/forceShift'
+import { plotWindow, viewBox } from '../shared/plotWindow'
+import { SupportLabel } from '../shared/SupportGlyph'
 import MomentArc from './MomentArc'
 import { collectPoints, num, parseGeometry, path, point, str } from './schema'
 
-const BLOCKED_DOT = 0.9
-const LABEL_DISTANCE = 1.15
+const SUPPORT_TYPES = ['pin', 'roller', 'wall'] as const
+type SupportType = (typeof SUPPORT_TYPES)[number]
 
-const toRad = (deg: number): number => (deg * Math.PI) / 180
-
-/** Unit vector pointing toward the ground side of a support (base direction). */
-function baseDir(angleDeg: number): { x: number; y: number } {
-  return { x: Math.sin(toRad(angleDeg)), y: -Math.cos(toRad(angleDeg)) }
-}
-
-/**
- * Build incident direction map from rigid body path segments.
- * Key: "x,y" string of a vertex; value: unit vectors of segments leaving it.
- */
-function incidentDirsFromPaths(
-  paths: Array<Array<[number, number]>>,
-): Map<string, Array<[number, number]>> {
-  const out = new Map<string, Array<[number, number]>>()
-  const push = (key: string, dir: [number, number]) => {
-    const list = out.get(key)
-    if (list) list.push(dir)
-    else out.set(key, [dir])
-  }
-  for (const pts of paths) {
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, ay] = pts[i]
-      const [bx, by] = pts[i + 1]
-      const len = Math.hypot(bx - ax, by - ay)
-      if (len < 1e-9) continue
-      const ux = (bx - ax) / len
-      const uy = (by - ay) / len
-      push(`${String(ax)},${String(ay)}`, [ux, uy])
-      push(`${String(bx)},${String(by)}`, [-ux, -uy])
-    }
-  }
-  return out
-}
-
-/** drawForces.m:60-98 — shift when force direction is blocked by structure. */
-function isShifted(dirs: Array<[number, number]>, ux: number, uy: number): boolean {
-  const forwardBlocked = dirs.some(([mx, my]) => mx * ux + my * uy > BLOCKED_DOT)
-  if (!forwardBlocked) return false
-  const backwardBlocked = dirs.some(([mx, my]) => -(mx * ux + my * uy) > BLOCKED_DOT)
-  return !backwardBlocked
-}
+const isSupport = (type: string): type is SupportType =>
+  (SUPPORT_TYPES as readonly string[]).includes(type)
 
 export default function RigidBodyDiagram({ geometry }: { geometry: unknown }) {
-  const titleId = `rb-title-${useId()}`
-  const descId = `rb-desc-${useId()}`
+  const uid = useId()
+  const titleId = `rb-title-${uid}`
+  const descId = `rb-desc-${uid}`
 
   const elements = parseGeometry(geometry)
   if (elements.length === 0) {
@@ -74,27 +36,17 @@ export default function RigidBodyDiagram({ geometry }: { geometry: unknown }) {
     .map((el) => path(el.properties.path))
     .filter((pts) => pts.length > 1)
 
-  const supports = elements.filter((el) => ['pin', 'roller', 'wall'].includes(el.element_type))
+  const supports = elements.filter((el) => isSupport(el.element_type))
   const loads = elements.filter((el) => el.element_type === 'point_load')
   const moments = elements.filter((el) => el.element_type === 'moment')
 
   const win = plotWindow(collectPoints(elements))
-
-  // Raw path vertex arrays for shift-rule computation.
-  const rawPaths = bodyPaths.map((pts) => pts.map((p): [number, number] => [p.x, p.y]))
-  const incidentDirs = incidentDirsFromPaths(rawPaths)
-
-  const vbX = win.xMin - MARGIN.left
-  const vbY = -(win.yMax + MARGIN.top)
-  const vbW = win.xMax - win.xMin + MARGIN.left + MARGIN.right
-  const vbH = win.yMax - win.yMin + MARGIN.top + MARGIN.bottom
-
-  const memberHW = GEOM.memberHalfWidth * 2.5
-  const outW = GEOM.outlineWidth * 6
+  const segments = pathSegments(bodyPaths)
+  const shouldShift = buildShiftRule(segments)
 
   return (
     <svg
-      viewBox={`${String(vbX)} ${String(vbY)} ${String(vbW)} ${String(vbH)}`}
+      viewBox={viewBox(win)}
       className="h-full w-full"
       role="img"
       aria-labelledby={`${titleId} ${descId}`}
@@ -107,79 +59,51 @@ export default function RigidBodyDiagram({ geometry }: { geometry: unknown }) {
         {moments.length === 1 ? '' : 's'}.
       </desc>
 
+      {/*
+        Single y-flip group. Physics coords are y-up; SVG is y-down.
+        Everything rendered inside this group uses engineering coordinates
+        directly. Text labels counter-flip themselves internally.
+      */}
       <g transform="scale(1,-1)">
         <Axes xMin={win.xMin} xMax={win.xMax} yMin={win.yMin} yMax={win.yMax} />
 
-        {/* Body: dark outline pass then lavender fill pass, both with round caps. */}
-        {bodyPaths.map((pts, i) => {
-          const ptStr = pts.map((p) => `${String(p.x)},${String(p.y)}`).join(' ')
-          return (
-            <g key={i}>
-              <polyline
-                points={ptStr}
-                fill="none"
-                stroke={COLORS.outline}
-                strokeWidth={memberHW * 2 + outW * 2}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              <polyline
-                points={ptStr}
-                fill="none"
-                stroke={COLORS.member}
-                strokeWidth={memberHW * 2}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            </g>
-          )
-        })}
+        <BodyPipes paths={bodyPaths} />
 
-        {/* Supports — shared glyphs already carry OPACITY.support via SupportFrame. */}
+        {/* Supports and loads sit on top of the body so they stay readable
+            wherever they land -- see OPACITY in constants.ts. */}
         {supports.map((el, i) => {
           const at = point(el.properties.position)
           if (!at) return null
           const rotation = num(el.properties.rotation)
-          const label = str(el.properties.label)
-          const kind = el.element_type as 'pin' | 'roller' | 'wall'
+          const kind = el.element_type as SupportType
 
-          // Label base direction: wall uses rotation+180 (body points along rotation,
-          // wall face is the opposite side); pin/roller use rotation directly.
-          const labelAngle = kind === 'wall' ? rotation + 180 : rotation
-          const dir = baseDir(labelAngle)
+          // A wall's rotation points along the body rather than at the free
+          // side, so its drawn base angle is the flipped one -- and the letter
+          // has to follow the glyph, not the raw rotation.
+          const drawnAngle = kind === 'wall' ? wallBaseAngle(rotation) : rotation
 
           return (
             <g key={i}>
               {kind === 'pin' && <PinSupport x={at.x} y={at.y} angleDeg={rotation} />}
               {kind === 'roller' && <RollerSupport x={at.x} y={at.y} angleDeg={rotation} />}
               {kind === 'wall' && <WallSupport x={at.x} y={at.y} angleDeg={rotation} />}
-              {label !== '' && (
-                <FlipText
-                  x={at.x + dir.x * LABEL_DISTANCE}
-                  y={at.y + dir.y * LABEL_DISTANCE}
-                  fontSize={0.2}
-                  fill={COLORS.outline}
-                  anchor="middle"
-                >
-                  {label}
-                </FlipText>
-              )}
+              <SupportLabel
+                x={at.x}
+                y={at.y}
+                angleDeg={drawnAngle}
+                label={str(el.properties.label)}
+                segments={segments}
+              />
             </g>
           )
         })}
 
-        {/* Applied loads — shared 7-gon ForceArrow with shift rule. */}
         {loads.map((el, i) => {
           const at = point(el.properties.position)
           const force = point(el.properties.force_vector)
           if (!at || !force) return null
           const mag = Math.hypot(force.x, force.y)
           if (mag === 0) return null
-          const ux = force.x / mag
-          const uy = force.y / mag
-          const key = `${String(at.x)},${String(at.y)}`
-          const dirs = incidentDirs.get(key) ?? []
-          const shifted = isShifted(dirs, ux, uy)
           return (
             <ForceArrow
               key={i}
@@ -187,12 +111,11 @@ export default function RigidBodyDiagram({ geometry }: { geometry: unknown }) {
               fx={force.x}
               fy={force.y}
               label={str(el.properties.label)}
-              shifted={shifted}
+              shifted={shouldShift(at, force.x / mag, force.y / mag)}
             />
           )
         })}
 
-        {/* Moments — arc with filled arrowhead, no <marker>. */}
         {moments.map((el, i) => {
           const at = point(el.properties.position)
           if (!at) return null

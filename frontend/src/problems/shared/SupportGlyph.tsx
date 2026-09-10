@@ -1,4 +1,7 @@
-import { COLORS, GEOM, OPACITY, WALL } from './constants'
+import { COLORS, GEOM, OPACITY, TYPE, WALL } from './constants'
+import MathLabel from './MathLabel'
+import type { Segment } from './forceShift'
+import { placeSupportLabel } from './supportLabels'
 
 /** drawSupports.m:83-88 — equilateral triangle, side 0.3, apex tucked under the joint. */
 export const TRIANGLE_POINTS = [
@@ -56,14 +59,50 @@ export function SupportFrame({
 }
 
 /**
- * Solid charcoal bar for a fixed-wall (cantilever) support. The bar is
- * perpendicular to the body at the anchor point, placed on the "outside"
- * (the side facing away from the body). The rotation convention here is the
- * same as for pins/rollers: 0 = face below, 90 = face right, etc.
+ * The letter that ties a support in the picture to the `reaction_Ax` style
+ * answer fields. It sits just clear of the node on the side *opposite* the
+ * support base, so it never lands inside the glyph or under the ground bar
+ * (ppt/media/image4.png: `A`'s support faces right, its letter sits left).
  *
- * `wall` uses rotation + 180 from the generator (which points the wall code
- * along the body, not at the ground side), so `drawnRotation` in the rigid-body
- * Supports component does the flip before calling this.
+ * `angleDeg` is the drawn base angle, i.e. the same value handed to
+ * `SupportFrame` — callers that have to flip a wall must flip before calling.
+ */
+export function SupportLabel({
+  x,
+  y,
+  angleDeg,
+  label,
+  segments = [],
+}: {
+  x: number
+  y: number
+  angleDeg: number
+  label: string
+  /** Body segments to keep the letter off; see `placeSupportLabel`. */
+  segments?: Segment[]
+}) {
+  if (label === '') return null
+  const at = placeSupportLabel({ x, y }, angleDeg, segments)
+  return (
+    <MathLabel
+      x={at.x}
+      y={at.y}
+      label={label}
+      fontSize={TYPE.supportLabel}
+      fill={COLORS.outline}
+      anchor="middle"
+    />
+  )
+}
+
+/**
+ * Solid charcoal bar for a fixed-wall (cantilever) support, drawn across the
+ * body's end so the member appears to run into it.
+ *
+ * `angleDeg` is a base angle on the same convention as `baseDir` and
+ * `SupportFrame` — 0 = bar below the node, 90 = bar to its right. The
+ * generator's own wall rotation is not on that convention; `wallBaseAngle` in
+ * WallSupport converts it.
  */
 export function WallBar({
   x,

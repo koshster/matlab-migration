@@ -1,4 +1,4 @@
-import { GEOM, TYPE } from './constants'
+import { GEOM, TYPE } from '../shared/constants'
 
 export interface Placement {
   x: number

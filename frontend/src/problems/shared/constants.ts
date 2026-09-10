@@ -30,6 +30,13 @@ export const COLORS = {
 export const GEOM = {
   /** plotTruss.m:11 `pipe_radius` — half-width of a member. */
   memberHalfWidth: 0.05,
+  /**
+   * Half-width of a rigid-body / lamina pipe run. The deck draws these bars
+   * thinner than truss members — ~0.06a against ~0.11a, measured off
+   * ppt/media/image4.png and image34.png. DEVIATION: rounded up to 0.08a total
+   * so the bar still reads in the 288px admin preview.
+   */
+  bodyHalfWidth: 0.04,
   /** plotTruss.m:13 `edge_width` = 1pt, expressed in data units. */
   outlineWidth: 0.009,
 
@@ -73,6 +80,12 @@ export const GEOM = {
 
   /** DEVIATION: 0.11 in plotTruss.m:47; opened up to clear the larger type. */
   memberLabelOffset: 0.14,
+  /**
+   * How far a support's letter sits from its node, measured opposite the
+   * support base so the letter lands on the free side of the glyph. ~0.28a in
+   * ppt/media/image4.png (`A` and `B` both tuck against their nodes).
+   */
+  supportLabelOffset: 0.3,
   /** drawForces.m:15 — label sits 0.1 past the tip, or 0.15 past the tail when shifted. */
   forceLabelUnshifted: 1.2,
   forceLabelShifted: -1.3,
@@ -98,7 +111,26 @@ export const OPACITY = {
 export const TYPE = {
   memberLabel: 0.13,
   forceLabel: 0.2,
+  /** Support letters are set at the same size as force labels in the deck. */
+  supportLabel: 0.2,
   tickLabel: 0.15,
+} as const
+
+/**
+ * Concentrated couple (moment) glyph, measured off ppt/media/image4.png and
+ * image34.png where one grid square is ~302px: the arc radius is ~70px and the
+ * stroke ~13px.
+ */
+export const MOMENT = {
+  radius: 0.3,
+  strokeWidth: 0.045,
+  /** Arrowhead length; a shade under half the arrow-force head so it reads as a tip. */
+  arrowLength: 0.22,
+  /** Label clearance past the arc, along the arc's bisector. */
+  labelGap: 0.42,
+  /** Guard rails on the generator's sweep so the arc always has a visible gap. */
+  minSweepDeg: 10,
+  maxSweepDeg: 350,
 } as const
 
 /** Room outside the plot box for the tick labels, in units of `a`. */
@@ -131,13 +163,14 @@ export function arrowPolygon(length: number): Array<[number, number]> {
 /**
  * Wall (fixed/cantilever) support colours and geometry.
  * Sampled from ppt/media/image1.png and image33.png — the dark charcoal bar
- * is a solid fill, no hatch ticks.
+ * is a solid fill, no hatch ticks. In image33 one grid square is ~185px and the
+ * bar measures ~143px long by ~25px thick, hence 0.77a x 0.135a.
  */
 export const WALL = {
   /** Dark charcoal bar colour sampled from the deck reference images. */
   barColor: '#332E27',
   /** Half the bar length in units of `a`. */
-  barHalfLength: 0.75,
+  barHalfLength: 0.385,
   /** Bar thickness in units of `a`. */
-  barThickness: 0.22,
+  barThickness: 0.135,
 } as const

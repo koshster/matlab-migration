@@ -1,6 +1,5 @@
-import { arrowPolygon, COLORS, GEOM } from '../shared/constants'
-import FlipText from '../shared/FlipText'
-import { splitLabel } from '../shared/labels'
+import { arrowPolygon, COLORS, MOMENT, OPACITY, TYPE } from '../shared/constants'
+import MathLabel from '../shared/MathLabel'
 
 interface MomentArcProps {
   x: number
@@ -14,10 +13,6 @@ interface MomentArcProps {
   label: string
 }
 
-const RADIUS = 0.62
-const STROKE = 0.09
-const ARROW_LEN = GEOM.arrowLength * 0.5
-
 const toRad = (deg: number): number => (deg * Math.PI) / 180
 
 /**
@@ -25,8 +20,8 @@ const toRad = (deg: number): number => (deg * Math.PI) / 180
  *
  * The generator picks `arrowAngle` to point at whichever side of the joint has
  * no body attached, and `arcAngle` for how far round to sweep, so the arc is
- * centred on the bisector and the gap lands over the members. The arrowhead
- * goes on the leading end of the rotation direction, which shows the sign.
+ * centred on the bisector and the gap lands over the body. The arrowhead goes
+ * on the leading end of the rotation direction, which shows the sign.
  */
 export default function MomentArc({
   x,
@@ -36,39 +31,35 @@ export default function MomentArc({
   arcAngle,
   label,
 }: MomentArcProps) {
-  const sweep = Math.min(Math.max(arcAngle, 10), 350)
-  const start = arrowAngle - sweep / 2
-  const end = arrowAngle + sweep / 2
+  const { radius: r, arrowLength: headLen } = MOMENT
+  const sweep = Math.min(Math.max(arcAngle, MOMENT.minSweepDeg), MOMENT.maxSweepDeg)
+  const startRad = toRad(arrowAngle - sweep / 2)
+  const endRad = toRad(arrowAngle + sweep / 2)
   const ccw = direction >= 0
 
-  const startRad = toRad(start)
-  const endRad = toRad(end)
-
-  const startX = x + RADIUS * Math.cos(startRad)
-  const startY = y + RADIUS * Math.sin(startRad)
-  const endX = x + RADIUS * Math.cos(endRad)
-  const endY = y + RADIUS * Math.sin(endRad)
+  const on = (rad: number): [number, number] => [x + r * Math.cos(rad), y + r * Math.sin(rad)]
+  const [startX, startY] = on(startRad)
+  const [endX, endY] = on(endRad)
 
   const largeArc = sweep > 180 ? 1 : 0
 
-  // Draw arc from start → end (CCW) or end → start (CW).
-  const d = ccw
-    ? `M ${String(startX)} ${String(startY)} A ${String(RADIUS)} ${String(RADIUS)} 0 ${String(largeArc)} 1 ${String(endX)} ${String(endY)}`
-    : `M ${String(endX)} ${String(endY)} A ${String(RADIUS)} ${String(RADIUS)} 0 ${String(largeArc)} 0 ${String(startX)} ${String(startY)}`
+  // Draw start -> end for CCW, end -> start for CW, so the path always ends
+  // where the arrowhead goes.
+  const [fromX, fromY, toX, toY, arcFlag] = ccw
+    ? [startX, startY, endX, endY, 1]
+    : [endX, endY, startX, startY, 0]
+  const d = `M ${String(fromX)} ${String(fromY)} A ${String(r)} ${String(r)} 0 ${String(largeArc)} ${String(arcFlag)} ${String(toX)} ${String(toY)}`
 
-  // Tangent direction at the tip of the arc (where the arrowhead goes).
-  // For CCW: tip is at `end`; tangent = (-sin(end), cos(end)).
-  // For CW: tip is at `start` (path end when reversed); tangent = (sin(start), -cos(start)).
-  const tipAngleRad = ccw ? endRad : startRad
-  const tipX = x + RADIUS * Math.cos(tipAngleRad)
-  const tipY = y + RADIUS * Math.sin(tipAngleRad)
-  const tanX = ccw ? -Math.sin(tipAngleRad) : Math.sin(tipAngleRad)
-  const tanY = ccw ? Math.cos(tipAngleRad) : -Math.cos(tipAngleRad)
+  // Tangent at the tip, in the direction of travel: the radial unit vector
+  // turned a quarter turn the way the arc sweeps.
+  const tipRad = ccw ? endRad : startRad
+  const turn = ccw ? 1 : -1
+  const tanX = -turn * Math.sin(tipRad)
+  const tanY = turn * Math.cos(tipRad)
 
-  // Arrow polygon: tail back from the tip, pointing in the tangent direction.
-  const tailX = tipX - tanX * ARROW_LEN
-  const tailY = tipY - tanY * ARROW_LEN
-  const arrowPts = arrowPolygon(ARROW_LEN)
+  const tailX = toX - tanX * headLen
+  const tailY = toY - tanY * headLen
+  const arrowPts = arrowPolygon(headLen)
     .map(([along, across]) => {
       const wx = tailX + along * tanX + across * -tanY
       const wy = tailY + along * tanY + across * tanX
@@ -76,27 +67,30 @@ export default function MomentArc({
     })
     .join(' ')
 
-  const labelDistance = RADIUS + GEOM.arrowLength * 1.1
+  const labelDistance = r + MOMENT.labelGap
   const labelX = x + labelDistance * Math.cos(toRad(arrowAngle))
   const labelY = y + labelDistance * Math.sin(toRad(arrowAngle))
 
-  const { head, unit } = splitLabel(label)
-
   return (
     <g>
-      <path d={d} fill="none" stroke={COLORS.force} strokeWidth={STROKE} />
-      <polygon points={arrowPts} fill={COLORS.force} />
+      <path
+        d={d}
+        fill="none"
+        stroke={COLORS.force}
+        strokeWidth={MOMENT.strokeWidth}
+        strokeLinecap="round"
+        opacity={OPACITY.force}
+      />
+      <polygon points={arrowPts} fill={COLORS.force} opacity={OPACITY.force} />
       {label !== '' && (
-        <FlipText
+        <MathLabel
           x={labelX}
           y={labelY}
-          fontSize={0.2}
+          label={label}
+          fontSize={TYPE.forceLabel}
           fill={COLORS.force}
           anchor="middle"
-        >
-          {head}
-          {unit ? <tspan fontStyle="italic">F</tspan> : null}
-        </FlipText>
+        />
       )}
     </g>
   )

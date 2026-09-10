@@ -1,4 +1,4 @@
-import { COLORS, GEOM } from './constants'
+import { COLORS, GEOM } from '../shared/constants'
 
 interface NodeProps {
   x: number
