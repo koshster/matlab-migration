@@ -13,6 +13,7 @@ from app.api.v1.admin.helpers import (
     _admin_assignment_detail,
     _admin_assignment_summary,
 )
+from app.api.v1.assignments import GRADEABLE_TYPES
 from app.db.models import (
     Assignment,
     AssignmentProblem,
@@ -21,9 +22,7 @@ from app.db.models import (
     Instructor,
 )
 from app.db.session import get_db
-from app.api.v1.assignments import GRADEABLE_TYPES
 from app.problems.registry import problem_registry
-from app.services.problem_display import build_display_payload
 from app.schemas.admin import (
     AssignmentCreateRequest,
     AssignmentUpdateRequest,
@@ -31,6 +30,7 @@ from app.schemas.admin import (
     _assert_date_order,
 )
 from app.services.authz import assert_course_role, require_instructor
+from app.services.problem_display import build_display_payload
 
 router = APIRouter(tags=["admin-assignments"])
 

@@ -13,10 +13,10 @@ from typing import Any
 import pytest
 
 from app.api.v1.assignments import _generator_params
-from app.services.problem_display import build_truss_geometry, member_field_key
 from app.db.models import AssignmentProblem
 from app.problems.base import AnswerSubmission
 from app.problems.truss.generator import truss_generator
+from app.services.problem_display import build_truss_geometry, member_field_key
 
 # The legacy MATLAB schedule, keyed by 1-based problem index.
 LEGACY_NODE_SCHEDULE = [3, 3, 4, 4, 5, 5, 6, 6]

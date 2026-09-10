@@ -28,7 +28,6 @@ from app.services.access import (
 from app.services.problem_display import (
     build_display_payload,
     build_truss_geometry,
-    build_answer_schema_truss,
     member_field_key,
 )
 from app.services.scoring import compute_score, resolve_saved_answers
@@ -175,7 +174,6 @@ def _generic_solution_answers(
 
 
 _SUBSCRIPT_DIGITS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
-
 
 
 def _generator_params(ap: AssignmentProblem, index: int) -> dict[str, Any]:

@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.problem_display import build_truss_geometry, member_field_key
 from app.core.security import hash_password
 from app.db.models import (
     Assignment,
@@ -33,6 +32,7 @@ from app.db.models import (
 )
 from app.db.session import async_session_factory
 from app.problems.registry import problem_registry
+from app.services.problem_display import build_truss_geometry, member_field_key
 
 PASSWORD = "demo1234"
 

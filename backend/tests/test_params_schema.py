@@ -12,10 +12,10 @@ from typing import Any
 import pytest
 
 from app.api.v1.assignments import _check_answers
-from app.services.problem_display import build_truss_geometry, member_field_key
 from app.problems.base import ParamFieldSpec
 from app.problems.registry import problem_registry
 from app.problems.truss.generator import truss_generator
+from app.services.problem_display import build_truss_geometry, member_field_key
 
 
 def _geometry(seed: int, params: Mapping[str, object]) -> dict[str, Any]:

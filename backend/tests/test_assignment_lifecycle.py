@@ -20,7 +20,6 @@ from app.api.v1.assignments import (
     _get_context,
     _resolve_slot,
 )
-from app.services.problem_display import build_truss_geometry, member_field_key
 from app.core.security import get_current_student_id
 from app.db.models import (
     Assignment,
@@ -33,6 +32,7 @@ from app.db.models import (
 from app.db.session import Base, get_db
 from app.main import app
 from app.problems.registry import problem_registry
+from app.services.problem_display import build_truss_geometry, member_field_key
 
 STUDENT_ID = uuid.uuid4()
 SLUG = "lifecycle-assignment"

@@ -140,8 +140,7 @@ async def seed() -> None:
             return a, problems
 
         truss_slots = [
-            {"num_nodes": n, "max_force": 5, "load_count": 2}
-            for n in [3, 3, 4, 4, 5, 5, 6, 6]
+            {"num_nodes": n, "max_force": 5, "load_count": 2} for n in [3, 3, 4, 4, 5, 5, 6, 6]
         ]
         # 8 rigid-body problems: cycle support_case 1→2→3 to exercise all three
         # support types (rollers / pin+roller / cantilever wall), escalating loads.

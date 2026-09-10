@@ -111,9 +111,7 @@ def build_answer_schema_truss(members: list[dict[str, Any]]) -> dict[str, Any]:
     return {"groups": [{"id": "member-forces", "label": "Member Forces", "fields": fields}]}
 
 
-def build_display_payload(
-    problem_type: str, display: Any
-) -> tuple[dict[str, Any], dict[str, Any]]:
+def build_display_payload(problem_type: str, display: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return (geometry, answer_schema) ready to place in a ProblemPayload.
 
     ``truss`` keeps its bespoke path because its answer schema is derived from

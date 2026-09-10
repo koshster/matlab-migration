@@ -12,12 +12,12 @@ from typing import Any
 
 import pytest
 
+from app.problems.truss.generator import truss_generator
 from app.services.problem_display import (
     build_answer_schema_truss,
     build_truss_geometry,
     member_field_key,
 )
-from app.problems.truss.generator import truss_generator
 
 
 def _find_fixture_dir() -> Path:

@@ -6,7 +6,6 @@ from app.db.models import Assignment, Course, RosterEntry
 from app.services.access import effective_close_at, isoformat_utc
 
 
-
 def _course_summary(
     c: Course,
     viewer_role: str,
