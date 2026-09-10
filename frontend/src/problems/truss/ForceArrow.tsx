@@ -1,83 +1,66 @@
+import { arrowPolygon, COLORS, GEOM, OPACITY, TYPE } from './constants'
+import FlipText from './FlipText'
+
 interface ForceArrowProps {
   node: { x: number; y: number }
   fx: number
   fy: number
   label: string
-  fontSize: number
+  /**
+   * True when the force direction is blocked by structure, so the arrow slides
+   * back one full length and its tip lands on the node instead of its tail
+   * (drawForces.m:58-103).
+   */
+  shifted: boolean
 }
 
-const ARROW_LEN = 1.8
-const ARROW_ID_COUNTER = { n: 0 }
+/** "3F" renders as an upright 3 followed by an italic F; "F" is just the italic F. */
+function splitLabel(label: string): { head: string; unit: boolean } {
+  if (label.endsWith('F')) return { head: label.slice(0, -1), unit: true }
+  return { head: label, unit: false }
+}
 
-export default function ForceArrow({ node, fx, fy, label, fontSize }: ForceArrowProps) {
-  const id = `arrowhead-${String(ARROW_ID_COUNTER.n++)}`
-
-  const mag = Math.sqrt(fx * fx + fy * fy)
+export default function ForceArrow({ node, fx, fy, label, shifted }: ForceArrowProps) {
+  const mag = Math.hypot(fx, fy)
   if (mag === 0) return null
 
   const ux = fx / mag
   const uy = fy / mag
+  const len = GEOM.arrowLength
 
-  // Tip at node; tail is ARROW_LEN units back
-  const x1 = node.x - ux * ARROW_LEN
-  const y1 = node.y - uy * ARROW_LEN
-  const x2 = node.x
-  const y2 = node.y
+  // Tail at the node by default; shifted back by one arrow length when blocked.
+  const tailX = shifted ? node.x - ux * len : node.x
+  const tailY = shifted ? node.y - uy * len : node.y
 
-  // Place label 3/4 of the way from tip toward tail — keeps it away from the node cluster
-  const tlx = x2 + (x1 - x2) * 0.75
-  const tly = y2 + (y1 - y2) * 0.75
-  const labelOffset = fontSize * 1.2
-  const lx = tlx - uy * labelOffset
-  const ly = tly + ux * labelOffset
+  // Arrow-local (along, across) -> world, so no rotate transform is needed.
+  const points = arrowPolygon(len)
+    .map(([along, across]) => {
+      const wx = tailX + along * ux + across * -uy
+      const wy = tailY + along * uy + across * ux
+      return `${String(wx)},${String(wy)}`
+    })
+    .join(' ')
 
-  const bgW = label.length * fontSize * 0.65
-  const bgH = fontSize * 1.5
+  const factor = shifted ? GEOM.forceLabelShifted : GEOM.forceLabelUnshifted
+  const lx = node.x + factor * len * ux
+  const ly = node.y + factor * len * uy
+
+  // drawForces.m:16-22 — the text grows away from the arrow, not back over it.
+  const horizontal = Math.abs(ux) > Math.abs(uy)
+  const anchor = horizontal ? (ux < 0 !== shifted ? 'end' : 'start') : 'middle'
+
+  const { head, unit } = splitLabel(label)
 
   return (
     <g>
-      <defs>
-        <marker
-          id={id}
-          markerWidth={6}
-          markerHeight={6}
-          refX={5}
-          refY={3}
-          orient="auto"
-        >
-          <path d="M0,0 L0,6 L6,3 z" fill="#dc2626" />
-        </marker>
-      </defs>
-      <line
-        x1={x1} y1={y1} x2={x2} y2={y2}
-        stroke="#dc2626"
-        strokeWidth={0.1}
-        markerEnd={`url(#${id})`}
-      />
-      {label && (
-        <g transform={`scale(1,-1) translate(0,${-2 * ly})`}>
-          <rect
-            x={lx - bgW / 2}
-            y={ly - bgH / 2}
-            width={bgW}
-            height={bgH}
-            rx={bgH / 4}
-            fill="white"
-            fillOpacity={0.85}
-          />
-          <text
-            x={lx}
-            y={ly}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={fontSize}
-            fill="#dc2626"
-            fontFamily="sans-serif"
-            fontWeight="700"
-          >
-            {label}
-          </text>
-        </g>
+      {/* Slightly transparent so a member under the shaft still reads; the
+          label stays fully opaque because it has to be read exactly. */}
+      <polygon points={points} fill={COLORS.force} opacity={OPACITY.force} />
+      {label !== '' && (
+        <FlipText x={lx} y={ly} fontSize={TYPE.forceLabel} fill={COLORS.force} anchor={anchor}>
+          {head}
+          {unit ? <tspan fontStyle="italic">F</tspan> : null}
+        </FlipText>
       )}
     </g>
   )

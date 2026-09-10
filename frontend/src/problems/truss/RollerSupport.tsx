@@ -1,26 +1,34 @@
+import { COLORS, GEOM } from './constants'
+import { GroundBar, SupportFrame, TRIANGLE_POINTS } from './SupportGlyph'
+
 interface RollerSupportProps {
   x: number
   y: number
   angleDeg: number
 }
 
-const TRIANGLE = '0,0 -0.45,-0.65 0.45,-0.65'
-
+/**
+ * Triangle, one wheel tangent to its base, then a ground bar below the wheel
+ * (drawSupports.m:103-121). The roller's bar is shorter than the pin's.
+ */
 export default function RollerSupport({ x, y, angleDeg }: RollerSupportProps) {
   return (
-    <g transform={`translate(${x},${y}) rotate(${-angleDeg})`}>
-      <polygon points={TRIANGLE} fill="#d1d5db" stroke="#6b7280" strokeWidth={0.05} />
-      {/* Roller wheel circle at triangle centroid (0, -0.65*2/3) */}
-      <circle cx={0} cy={-0.43} r={0.16} fill="#fff" stroke="#6b7280" strokeWidth={0.05} />
-      {/* Ground line */}
-      <line x1={-0.55} y1={-0.72} x2={0.55} y2={-0.72} stroke="#6b7280" strokeWidth={0.07} />
-      {[-0.4, -0.2, 0, 0.2, 0.4].map((dx) => (
-        <line
-          key={dx}
-          x1={dx} y1={-0.72} x2={dx - 0.12} y2={-0.92}
-          stroke="#6b7280" strokeWidth={0.05}
-        />
-      ))}
-    </g>
+    <SupportFrame x={x} y={y} angleDeg={angleDeg}>
+      <polygon
+        points={TRIANGLE_POINTS}
+        fill={COLORS.rollerFill}
+        stroke={COLORS.outline}
+        strokeWidth={GEOM.outlineWidth * 0.7}
+      />
+      <circle
+        cx={0}
+        cy={GEOM.wheelCenterY}
+        r={GEOM.wheelRadius}
+        fill={COLORS.wheelFill}
+        stroke={COLORS.outline}
+        strokeWidth={GEOM.outlineWidth * 0.7}
+      />
+      <GroundBar y={GEOM.rollerBarY} halfLength={GEOM.rollerBarHalfLength} />
+    </SupportFrame>
   )
 }

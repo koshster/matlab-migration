@@ -181,6 +181,15 @@ def _member_label(member_id: int) -> str:
     return "S" + str(member_id).translate(_SUBSCRIPT_DIGITS)
 
 
+def _force_label(magnitude: float) -> str:
+    """Display label for a point load, e.g. 3 -> '3F' and 1 -> 'F'."""
+    rounded = round(magnitude, 4)
+    if abs(rounded - 1.0) < 1e-9:
+        return "F"
+    whole = int(rounded)
+    return f"{whole}F" if abs(rounded - whole) < 1e-9 else f"{rounded:g}F"
+
+
 def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
     """Translate generator primitives into the contract's TrussGeometry shape.
 
@@ -221,20 +230,15 @@ def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
                     "node": int(p["node_index"]) + 1,
                     "fx": float(fv[0]),
                     "fy": float(fv[1]),
-                    "label": f"{mag:.1f}F",
+                    "label": _force_label(mag),
                 }
             )
 
     if nodes:
-        xs = [n["x"] for n in nodes]
-        ys = [n["y"] for n in nodes]
-        raw_range = max(max(xs) - min(xs), max(ys) - min(ys))
-        # Normalize so the largest span is 4 SVG units; the SVG
-        # sub-components are sized for ~4-unit geometry.
-        scale = 4.0 / raw_range if raw_range > 0.01 else 1.0
-        for n in nodes:
-            n["x"] = round(n["x"] * scale, 4)
-            n["y"] = round(n["y"] * scale, 4)
+        # Coordinates stay on the generator's integer grid. The renderer draws a
+        # unit grid labelled 0/a/2a, so rescaling here would put the nodes
+        # between gridlines. See geometry.generate_truss_geometry, which
+        # guarantees whole integer grid points.
         xs = [n["x"] for n in nodes]
         ys = [n["y"] for n in nodes]
         pad_x = max((max(xs) - min(xs)) * 0.15, 1.0)

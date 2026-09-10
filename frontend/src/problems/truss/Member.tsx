@@ -1,68 +1,55 @@
+import { COLORS, GEOM, TYPE } from './constants'
+import FlipText from './FlipText'
+import type { Placement } from './memberLabels'
+
 interface MemberProps {
   from: { x: number; y: number }
   to: { x: number; y: number }
-  label: string
-  fontSize: number
-  offset: number
-  centroid: { x: number; y: number }
+  /** Member number as shown in the diagram -- 1..n, not the S-subscript answer key. */
+  number: number
+  label: Placement
 }
 
-export default function Member({ from, to, label, fontSize, offset, centroid }: MemberProps) {
-  const mx = (from.x + to.x) / 2
-  const my = (from.y + to.y) / 2
-
+/**
+ * A member is a "pipe": a filled, black-outlined quad running node-centre to
+ * node-centre (plotTruss.m:31-40). The round joint caps are drawn by `Node`,
+ * which paints after every member.
+ */
+export default function Member({ from, to, number, label }: MemberProps) {
   const dx = to.x - from.x
   const dy = to.y - from.y
-  const len = Math.sqrt(dx * dx + dy * dy) || 1
+  const len = Math.hypot(dx, dy) || 1
 
-  // Two perpendicular unit vectors
-  const p1x = -dy / len, p1y = dx / len
-  const p2x = dy / len, p2y = -dx / len
+  // Perpendicular is 90 degrees CCW of from->to, exactly as plotTruss.m:57.
+  const px = -dy / len
+  const py = dx / len
+  const r = GEOM.memberHalfWidth
 
-  // Pick the one pointing AWAY from the truss centroid so labels radiate outward
-  const dot1 = p1x * (centroid.x - mx) + p1y * (centroid.y - my)
-  const perpX = dot1 <= 0 ? p1x : p2x
-  const perpY = dot1 <= 0 ? p1y : p2y
-
-  const lx = mx + perpX * offset
-  const ly = my + perpY * offset
-
-  const bgW = label.length * fontSize * 0.65
-  const bgH = fontSize * 1.5
+  const corners: Array<[number, number]> = [
+    [from.x - r * px, from.y - r * py],
+    [from.x + r * px, from.y + r * py],
+    [to.x + r * px, to.y + r * py],
+    [to.x - r * px, to.y - r * py],
+  ]
 
   return (
     <g>
-      <line
-        x1={from.x} y1={from.y}
-        x2={to.x} y2={to.y}
-        stroke="#6b7280"
-        strokeWidth={0.18}
-        strokeLinecap="round"
+      <polygon
+        points={corners.map(([x, y]) => `${String(x)},${String(y)}`).join(' ')}
+        fill={COLORS.member}
+        stroke={COLORS.outline}
+        strokeWidth={GEOM.outlineWidth}
       />
-      {/* Rect and text share one counter-flip group so they occupy the same coordinate space */}
-      <g transform={`scale(1,-1) translate(0,${-2 * ly})`}>
-        <rect
-          x={lx - bgW / 2}
-          y={ly - bgH / 2}
-          width={bgW}
-          height={bgH}
-          rx={bgH / 4}
-          fill="white"
-          fillOpacity={0.85}
-        />
-        <text
-          x={lx}
-          y={ly}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize={fontSize}
-          fill="#2563eb"
-          fontFamily="sans-serif"
-          fontWeight="600"
-        >
-          {label}
-        </text>
-      </g>
+      <FlipText
+        x={label.x}
+        y={label.y}
+        fontSize={TYPE.memberLabel}
+        fill={COLORS.memberLabel}
+        anchor={label.anchor}
+        weight="bold"
+      >
+        {number}
+      </FlipText>
     </g>
   )
 }
