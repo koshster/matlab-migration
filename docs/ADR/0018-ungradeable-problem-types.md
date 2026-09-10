@@ -55,3 +55,11 @@ records had to be carried onto that path explicitly rather than inherited:
 
 A type being gradeable does not make it renderable: the two are independent
 registries. `rigid_body` gained its frontend renderer separately.
+
+## Amendment — 2026-09-10 (feat/rigid-body-deck-styling)
+`GET /admin/problem-types` now filters by `GRADEABLE_TYPES`, so `beam` is no
+longer offered in the assignment builder UI. The old behaviour (all registered
+types were offered) let the builder default to `beam` (import order alphabetic),
+producing problems with `lockReason: "unavailable"` that students could never
+solve. Open Question #17 is closed: the conservative default is to hide
+unimplemented types from the builder entirely.

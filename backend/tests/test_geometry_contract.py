@@ -12,9 +12,9 @@ from typing import Any
 
 import pytest
 
-from app.api.v1.assignments import (
-    _build_answer_schema,
-    _build_truss_geometry,
+from app.services.problem_display import (
+    build_answer_schema_truss,
+    build_truss_geometry,
     member_field_key,
 )
 from app.problems.truss.generator import truss_generator
@@ -43,7 +43,7 @@ NODE_KEYS = {"id", "x", "y"}
 
 def _geometry(seed: int, num_nodes: int) -> dict[str, Any]:
     display = truss_generator.generate(seed=seed, params={"num_nodes": num_nodes})
-    return _build_truss_geometry(display.visual_schema)
+    return build_truss_geometry(display.visual_schema)
 
 
 @pytest.mark.parametrize("num_nodes", [3, 4, 5, 6])
@@ -99,7 +99,7 @@ def test_answer_field_keys_stay_plain_ascii(num_nodes: int) -> None:
     """Field keys are persisted in draft_answers and submissions, so they must
     stay `S1`-style ASCII even though the displayed label is subscripted."""
     g = _geometry(seed=99, num_nodes=num_nodes)
-    schema = _build_answer_schema(g["members"])
+    schema = build_answer_schema_truss(g["members"])
 
     assert len(schema["groups"]) == 1
     group = schema["groups"][0]
@@ -146,6 +146,6 @@ def test_live_geometry_shape_matches_msw_fixtures(fixture_name: str) -> None:
         assert set(g["forces"][0]) == set(fixture_geometry["forces"][0])
 
     fixture_group = fixture["answerSchema"]["groups"][0]
-    live_group = _build_answer_schema(g["members"])["groups"][0]
+    live_group = build_answer_schema_truss(g["members"])["groups"][0]
     assert set(live_group) == set(fixture_group)
     assert set(live_group["fields"][0]) == set(fixture_group["fields"][0])

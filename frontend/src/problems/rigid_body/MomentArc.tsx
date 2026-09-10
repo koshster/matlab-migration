@@ -1,5 +1,6 @@
-import { useId } from 'react'
-import FlipText from './FlipText'
+import { arrowPolygon, COLORS, GEOM } from '../shared/constants'
+import FlipText from '../shared/FlipText'
+import { splitLabel } from '../shared/labels'
 
 interface MomentArcProps {
   x: number
@@ -11,15 +12,11 @@ interface MomentArcProps {
   /** Angular sweep of the arc (degrees); the rest is the gap. */
   arcAngle: number
   label: string
-  fontSize: number
 }
 
 const RADIUS = 0.62
-// Markers scale with stroke width, so a 6-unit marker on a 0.09 stroke draws a
-// 0.54-unit arrowhead -- bigger than the arc it caps. Keep it well under RADIUS.
-const MARKER = 3.5
 const STROKE = 0.09
-const COLOR = '#7c3aed'
+const ARROW_LEN = GEOM.arrowLength * 0.5
 
 const toRad = (deg: number): number => (deg * Math.PI) / 180
 
@@ -29,8 +26,7 @@ const toRad = (deg: number): number => (deg * Math.PI) / 180
  * The generator picks `arrowAngle` to point at whichever side of the joint has
  * no body attached, and `arcAngle` for how far round to sweep, so the arc is
  * centred on the bisector and the gap lands over the members. The arrowhead
- * goes on the end the rotation runs toward -- leading end for counter-
- * clockwise, trailing end for clockwise -- which is what shows the sign.
+ * goes on the leading end of the rotation direction, which shows the sign.
  */
 export default function MomentArc({
   x,
@@ -39,57 +35,67 @@ export default function MomentArc({
   arrowAngle,
   arcAngle,
   label,
-  fontSize,
 }: MomentArcProps) {
-  const markerId = `rb-moment-${useId()}`
-
   const sweep = Math.min(Math.max(arcAngle, 10), 350)
   const start = arrowAngle - sweep / 2
   const end = arrowAngle + sweep / 2
-
-  const startX = x + RADIUS * Math.cos(toRad(start))
-  const startY = y + RADIUS * Math.sin(toRad(start))
-  const endX = x + RADIUS * Math.cos(toRad(end))
-  const endY = y + RADIUS * Math.sin(toRad(end))
-
-  const largeArc = sweep > 180 ? 1 : 0
   const ccw = direction >= 0
 
-  // Draw in the direction the couple turns, so `markerEnd` lands the arrowhead
-  // on the correct end without a second path. `sweepFlag` is 1 for increasing
-  // angle, which is counter-clockwise in the diagram's y-up frame.
+  const startRad = toRad(start)
+  const endRad = toRad(end)
+
+  const startX = x + RADIUS * Math.cos(startRad)
+  const startY = y + RADIUS * Math.sin(startRad)
+  const endX = x + RADIUS * Math.cos(endRad)
+  const endY = y + RADIUS * Math.sin(endRad)
+
+  const largeArc = sweep > 180 ? 1 : 0
+
+  // Draw arc from start → end (CCW) or end → start (CW).
   const d = ccw
     ? `M ${String(startX)} ${String(startY)} A ${String(RADIUS)} ${String(RADIUS)} 0 ${String(largeArc)} 1 ${String(endX)} ${String(endY)}`
     : `M ${String(endX)} ${String(endY)} A ${String(RADIUS)} ${String(RADIUS)} 0 ${String(largeArc)} 0 ${String(startX)} ${String(startY)}`
 
-  const labelDistance = RADIUS + fontSize * 1.4
+  // Tangent direction at the tip of the arc (where the arrowhead goes).
+  // For CCW: tip is at `end`; tangent = (-sin(end), cos(end)).
+  // For CW: tip is at `start` (path end when reversed); tangent = (sin(start), -cos(start)).
+  const tipAngleRad = ccw ? endRad : startRad
+  const tipX = x + RADIUS * Math.cos(tipAngleRad)
+  const tipY = y + RADIUS * Math.sin(tipAngleRad)
+  const tanX = ccw ? -Math.sin(tipAngleRad) : Math.sin(tipAngleRad)
+  const tanY = ccw ? Math.cos(tipAngleRad) : -Math.cos(tipAngleRad)
+
+  // Arrow polygon: tail back from the tip, pointing in the tangent direction.
+  const tailX = tipX - tanX * ARROW_LEN
+  const tailY = tipY - tanY * ARROW_LEN
+  const arrowPts = arrowPolygon(ARROW_LEN)
+    .map(([along, across]) => {
+      const wx = tailX + along * tanX + across * -tanY
+      const wy = tailY + along * tanY + across * tanX
+      return `${String(wx)},${String(wy)}`
+    })
+    .join(' ')
+
+  const labelDistance = RADIUS + GEOM.arrowLength * 1.1
   const labelX = x + labelDistance * Math.cos(toRad(arrowAngle))
   const labelY = y + labelDistance * Math.sin(toRad(arrowAngle))
 
+  const { head, unit } = splitLabel(label)
+
   return (
     <g>
-      <defs>
-        <marker
-          id={markerId}
-          markerWidth={MARKER}
-          markerHeight={MARKER}
-          refX={MARKER}
-          refY={MARKER / 2}
-          orient="auto"
+      <path d={d} fill="none" stroke={COLORS.force} strokeWidth={STROKE} />
+      <polygon points={arrowPts} fill={COLORS.force} />
+      {label !== '' && (
+        <FlipText
+          x={labelX}
+          y={labelY}
+          fontSize={0.2}
+          fill={COLORS.force}
+          anchor="middle"
         >
-          <path d={`M0,0 L0,${String(MARKER)} L${String(MARKER)},${String(MARKER / 2)} z`} fill={COLOR} />
-        </marker>
-      </defs>
-      <path
-        d={d}
-        fill="none"
-        stroke={COLOR}
-        strokeWidth={STROKE}
-        markerEnd={`url(#${markerId})`}
-      />
-      {label && (
-        <FlipText x={labelX} y={labelY} fontSize={fontSize} fill={COLOR} plate>
-          {label}
+          {head}
+          {unit ? <tspan fontStyle="italic">F</tspan> : null}
         </FlipText>
       )}
     </g>

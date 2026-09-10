@@ -2033,6 +2033,52 @@ components:
           type: number
 
     # -------------------------------------------------------------------------
+    # RigidBodyGeometry — concrete geometry type for problemType="rigid_body"
+    # (geometry field in ProblemPayload is opaque; this is the resolved shape)
+    # -------------------------------------------------------------------------
+
+    RigidBodyGeometry:
+      type: object
+      required: [schemaVersion, elements]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/RigidBodyElement"
+
+    RigidBodyElement:
+      type: object
+      required: [element_type, properties]
+      properties:
+        element_type:
+          type: string
+          enum:
+            - rigid_body_path
+            - node
+            - pin
+            - roller
+            - wall
+            - point_load
+            - moment
+          description: >
+            Discriminator for the element. `properties` shape varies per type:
+            rigid_body_path has `path` (array of [x,y] pairs);
+            node has `x`, `y`;
+            pin/roller/wall have `position` ([x,y]), `rotation` (degrees), `label`;
+            point_load has `position` ([x,y]), `force_vector` ([fx,fy]), `label`;
+            moment has `position` ([x,y]), `direction` (+1 CCW/-1 CW),
+            `arrow_angle` (degrees), `arc_angle` (degrees), `label`.
+        properties:
+          type: object
+          additionalProperties: true
+          description: >
+            Polymorphic bag; shape is governed by element_type.
+            Kept as a loose object — the renderer narrows it per type.
+
+    # -------------------------------------------------------------------------
     # Check + submission
     # -------------------------------------------------------------------------
 

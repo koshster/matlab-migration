@@ -33,13 +33,15 @@ describe('RigidBodyDiagram', () => {
   it('draws every element kind the generator emits', () => {
     const svg = draw(fixtures.with_moments)
 
-    // Body, supports (2 triangles), loads (red arrows), couples (purple arcs).
-    expect(svg.querySelectorAll('polyline')).toHaveLength(1)
-    expect(svg.querySelectorAll('polygon')).toHaveLength(2)
-    expect(svg.querySelectorAll('line[stroke="#dc2626"]')).toHaveLength(2)
-    expect(svg.querySelectorAll('path[stroke="#7c3aed"]')).toHaveLength(2)
-    // One circle per joint, plus the roller's wheel.
-    expect(svg.querySelectorAll('circle').length).toBeGreaterThan(2)
+    // Body: 2 polylines per path (outline pass + fill pass).
+    expect(svg.querySelectorAll('polyline')).toHaveLength(2)
+    // Polygons: pin triangle + roller triangle + 2 force 7-gons + 2 moment arrowheads.
+    expect(svg.querySelectorAll('polygon')).toHaveLength(6)
+    // Forces use filled polygons (no <line>); moments use <path> arcs, not purple.
+    expect(svg.querySelectorAll('line[stroke="#dc2626"]')).toHaveLength(0)
+    expect(svg.querySelectorAll('path[stroke="#8B0000"]')).toHaveLength(2)
+    // Roller wheel circle; joint markers removed (rigid body has no discrete joints).
+    expect(svg.querySelectorAll('circle').length).toBeGreaterThanOrEqual(1)
   })
 
   it('labels supports so the diagram ties back to the answer fields', () => {
@@ -66,17 +68,18 @@ describe('RigidBodyDiagram', () => {
     }
   })
 
-  it('normalizes coordinates so glyphs stay proportionate', () => {
-    // Glyph constants are sized for ~4-unit geometry and nothing on the server
-    // rescales the generic payload, so the renderer has to.
+  it('places body nodes at their raw grid coordinates without rescaling', () => {
+    // Generator produces integer-grid coordinates; the renderer uses plotWindow
+    // (floor/ceil ±1) rather than rescaling, so coordinates stay unchanged.
     const svg = draw(fixtures.pin_roller)
     const pairs = (svg.querySelector('polyline')?.getAttribute('points') ?? '')
       .split(' ')
       .map((p) => p.split(',').map(Number))
-    const xs = pairs.map(([x]) => x)
-    const ys = pairs.map(([, y]) => y)
-    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))
-    expect(span).toBeCloseTo(4, 5)
+    expect(pairs.length).toBeGreaterThan(1)
+    for (const [x, y] of pairs) {
+      expect(Number.isInteger(x)).toBe(true)
+      expect(Number.isInteger(y)).toBe(true)
+    }
   })
 
   describe('support orientation', () => {
@@ -155,7 +158,8 @@ describe('RigidBodyDiagram', () => {
           { element_type: 'point_load', properties: { position: [1, 1], force_vector: null } },
         ],
       })
-      expect(svg.querySelectorAll('polyline')).toHaveLength(1)
+      // 2 polylines (outline + fill) for the valid rigid_body_path.
+      expect(svg.querySelectorAll('polyline')).toHaveLength(2)
       expect(svg.querySelectorAll('polygon')).toHaveLength(0)
       expect(svg.querySelectorAll('line[stroke="#dc2626"]')).toHaveLength(0)
     })
@@ -169,16 +173,16 @@ describe('RigidBodyDiagram', () => {
     })
   })
 
-  it('gives each arrowhead marker its own id across diagrams', () => {
-    // Review mode renders several problems at once; a shared marker id would
-    // let one diagram's arrowheads disappear into another's defs.
+  it('gives each diagram a unique title id so aria is correct across diagrams', () => {
+    // Review mode renders several problems at once; shared title ids would break
+    // aria-labelledby on all but the first. useId() inside the component fixes this.
     const { container } = render(
       <>
         <RigidBodyDiagram geometry={fixtures.pin_roller} />
         <RigidBodyDiagram geometry={fixtures.three_rollers} />
       </>,
     )
-    const ids = [...container.querySelectorAll('marker')].map((m) => m.getAttribute('id'))
+    const ids = [...container.querySelectorAll('title')].map((t) => t.getAttribute('id'))
     expect(ids.length).toBeGreaterThan(1)
     expect(new Set(ids).size).toBe(ids.length)
   })

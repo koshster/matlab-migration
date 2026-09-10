@@ -1123,6 +1123,22 @@ export interface components {
             yMin: number;
             yMax: number;
         };
+        RigidBodyGeometry: {
+            /** @enum {integer} */
+            schemaVersion: 1;
+            elements: components["schemas"]["RigidBodyElement"][];
+        };
+        RigidBodyElement: {
+            /**
+             * @description Discriminator for the element. `properties` shape varies per type: rigid_body_path has `path` (array of [x,y] pairs); node has `x`, `y`; pin/roller/wall have `position` ([x,y]), `rotation` (degrees), `label`; point_load has `position` ([x,y]), `force_vector` ([fx,fy]), `label`; moment has `position` ([x,y]), `direction` (+1 CCW/-1 CW), `arrow_angle` (degrees), `arc_angle` (degrees), `label`.
+             * @enum {string}
+             */
+            element_type: "rigid_body_path" | "node" | "pin" | "roller" | "wall" | "point_load" | "moment";
+            /** @description Polymorphic bag; shape is governed by element_type. Kept as a loose object — the renderer narrows it per type. */
+            properties: {
+                [key: string]: unknown;
+            };
+        };
         AnswersRequest: {
             answers: {
                 [key: string]: number | null;

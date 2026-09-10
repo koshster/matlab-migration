@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from app.api.v1.assignments import _build_truss_geometry, _check_answers, member_field_key
+from app.api.v1.assignments import _check_answers
+from app.services.problem_display import build_truss_geometry, member_field_key
 from app.problems.base import ParamFieldSpec
 from app.problems.registry import problem_registry
 from app.problems.truss.generator import truss_generator
@@ -19,7 +20,7 @@ from app.problems.truss.generator import truss_generator
 
 def _geometry(seed: int, params: Mapping[str, object]) -> dict[str, Any]:
     generated = truss_generator.generate(seed=seed, params=dict(params))
-    return _build_truss_geometry(generated.visual_schema)
+    return build_truss_geometry(generated.visual_schema)
 
 
 def test_every_registered_generator_declares_a_catalogue_entry() -> None:

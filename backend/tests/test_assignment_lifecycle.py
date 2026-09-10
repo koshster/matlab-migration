@@ -15,13 +15,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.v1.assignments import (
-    _build_truss_geometry,
     _effective_seed,
     _generator_params,
     _get_context,
     _resolve_slot,
-    member_field_key,
 )
+from app.services.problem_display import build_truss_geometry, member_field_key
 from app.core.security import get_current_student_id
 from app.db.models import (
     Assignment,
@@ -116,7 +115,7 @@ async def correct_answers(db: AsyncSession, index: int) -> dict[str, float]:
     generator = problem_registry.get(ap.problem_type)
     seed = _effective_seed(sa, slot)
     params = _generator_params(ap, index)
-    geometry = _build_truss_geometry(generator.generate(seed=seed, params=params).visual_schema)
+    geometry = build_truss_geometry(generator.generate(seed=seed, params=params).visual_schema)
     truth = generator.solve(seed=seed, params=params)
     keys = list(truth["member_solutions"].keys())
     return {

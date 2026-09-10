@@ -170,9 +170,9 @@ async def test_check_answers_correct_and_incorrect(
     params = _generator_params(ap, 1)
 
     display = generator.generate(seed=seed, params=params)
-    from app.api.v1.assignments import _build_truss_geometry
+    from app.services.problem_display import build_truss_geometry
 
-    geometry = _build_truss_geometry(display.visual_schema)
+    geometry = build_truss_geometry(display.visual_schema)
     ground_truth = generator.solve(seed=seed, params=params)
 
     keys = list(ground_truth["member_solutions"].keys())

@@ -12,11 +12,8 @@ from typing import Any
 
 import pytest
 
-from app.api.v1.assignments import (
-    _build_truss_geometry,
-    _generator_params,
-    member_field_key,
-)
+from app.api.v1.assignments import _generator_params
+from app.services.problem_display import build_truss_geometry, member_field_key
 from app.db.models import AssignmentProblem
 from app.problems.base import AnswerSubmission
 from app.problems.truss.generator import truss_generator
@@ -37,7 +34,7 @@ def _slot(order_index: int, params: dict[str, Any] | None) -> AssignmentProblem:
 
 def _node_count(seed: int, params: dict[str, Any]) -> int:
     display = truss_generator.generate(seed=seed, params=params)
-    return len(_build_truss_geometry(display.visual_schema)["nodes"])
+    return len(build_truss_geometry(display.visual_schema)["nodes"])
 
 
 def test_stored_params_override_the_hardcoded_schedule() -> None:
@@ -99,7 +96,7 @@ def test_router_grading_path_agrees_with_the_displayed_problem() -> None:
     params = _generator_params(ap, index=5)
 
     display = truss_generator.generate(seed=seed, params=params)
-    geometry = _build_truss_geometry(display.visual_schema)
+    geometry = build_truss_geometry(display.visual_schema)
     ground_truth = truss_generator.solve(seed=seed, params=params)
 
     keys = list(ground_truth["member_solutions"].keys())

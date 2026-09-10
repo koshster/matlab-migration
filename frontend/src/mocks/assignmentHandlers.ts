@@ -55,6 +55,52 @@ const PROBLEM_TYPES: ProblemTypeInfo[] = [
       },
     ],
   },
+  {
+    problemType: 'rigid_body',
+    displayName: '2D Rigid Body Equilibrium',
+    paramsSchema: [
+      {
+        name: 'support_case',
+        label: 'Support Configuration',
+        valueType: 'integer',
+        default: 2,
+        minimum: 1,
+        maximum: 3,
+        step: 1,
+        helpText: '1: 3 Rollers, 2: Pin + Roller (default), 3: Fixed Cantilever Wall.',
+      },
+      {
+        name: 'num_loads',
+        label: 'Applied forces',
+        valueType: 'integer',
+        default: 2,
+        minimum: 1,
+        maximum: 4,
+        step: 1,
+        helpText: 'Number of external point forces applied to the rigid body.',
+      },
+      {
+        name: 'num_moments',
+        label: 'Applied couple moments',
+        valueType: 'integer',
+        default: 0,
+        minimum: 0,
+        maximum: 2,
+        step: 1,
+        helpText: 'Number of concentrated couple moments applied to the rigid body.',
+      },
+      {
+        name: 'max_force',
+        label: 'Max load magnitude (kN)',
+        valueType: 'integer',
+        default: 5,
+        minimum: 1,
+        maximum: 20,
+        step: 1,
+        helpText: 'Upper bound for applied point load magnitudes.',
+      },
+    ],
+  },
 ]
 
 const LEGACY_RAMP = [3, 3, 4, 4, 5, 5, 6, 6]

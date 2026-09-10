@@ -25,6 +25,12 @@ from app.services.access import (
     problem_access,
     problem_status,
 )
+from app.services.problem_display import (
+    build_display_payload,
+    build_truss_geometry,
+    build_answer_schema_truss,
+    member_field_key,
+)
 from app.services.scoring import compute_score, resolve_saved_answers
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
@@ -170,153 +176,6 @@ def _generic_solution_answers(
 
 _SUBSCRIPT_DIGITS = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
-
-def member_field_key(member_id: int) -> str:
-    """Answer-field key for a member, e.g. 1 -> 'S1'. Stable across releases."""
-    return f"S{member_id}"
-
-
-def _member_label(member_id: int) -> str:
-    """Display label for a member, e.g. 1 -> 'S₁'."""
-    return "S" + str(member_id).translate(_SUBSCRIPT_DIGITS)
-
-
-def _force_label(magnitude: float) -> str:
-    """Display label for a point load, e.g. 3 -> '3F' and 1 -> 'F'."""
-    rounded = round(magnitude, 4)
-    if abs(rounded - 1.0) < 1e-9:
-        return "F"
-    whole = int(rounded)
-    return f"{whole}F" if abs(rounded - whole) < 1e-9 else f"{rounded:g}F"
-
-
-def _build_truss_geometry(visual_schema: list[Any]) -> dict[str, Any]:
-    """Translate generator primitives into the contract's TrussGeometry shape.
-
-    Node and member ids are 1-based on the wire; the generator emits 0-based
-    node indices, so every node reference is offset by one here.
-    """
-    nodes, members, supports, forces = [], [], [], []
-    member_idx = 0
-    for el in visual_schema:
-        p = el.properties
-        t = el.element_type
-        if t == "node":
-            nodes.append({"id": int(p["id"]) + 1, "x": p["x"], "y": p["y"]})
-        elif t == "member":
-            member_idx += 1
-            members.append(
-                {
-                    "id": member_idx,
-                    "from": int(p["start_node"]) + 1,
-                    "to": int(p["end_node"]) + 1,
-                    "label": _member_label(member_idx),
-                }
-            )
-        elif t in ("pin", "roller"):
-            supports.append(
-                {
-                    "node": int(p["node_index"]) + 1,
-                    "type": t,
-                    # Pins always sit base-down; rollers carry an outward rotation.
-                    "angleDeg": int(p.get("rotation", 0)),
-                }
-            )
-        elif t == "point_load":
-            fv = p["force_vector"]
-            mag = (fv[0] ** 2 + fv[1] ** 2) ** 0.5
-            forces.append(
-                {
-                    "node": int(p["node_index"]) + 1,
-                    "fx": float(fv[0]),
-                    "fy": float(fv[1]),
-                    "label": _force_label(mag),
-                }
-            )
-
-    if nodes:
-        # Coordinates stay on the generator's integer grid. The renderer draws a
-        # unit grid labelled 0/a/2a, so rescaling here would put the nodes
-        # between gridlines. See geometry.generate_truss_geometry, which
-        # guarantees whole integer grid points.
-        xs = [n["x"] for n in nodes]
-        ys = [n["y"] for n in nodes]
-        pad_x = max((max(xs) - min(xs)) * 0.15, 1.0)
-        pad_y = max((max(ys) - min(ys)) * 0.15, 1.0)
-        bounds = {
-            "xMin": min(xs) - pad_x,
-            "xMax": max(xs) + pad_x,
-            "yMin": min(ys) - pad_y,
-            "yMax": max(ys) + pad_y,
-        }
-    else:
-        bounds = {"xMin": -1, "xMax": 1, "yMin": -1, "yMax": 1}
-
-    return {
-        "schemaVersion": 1,
-        "nodes": nodes,
-        "members": members,
-        "supports": supports,
-        "forces": forces,
-        "bounds": bounds,
-    }
-
-
-def _build_answer_schema(members: list[dict[str, Any]]) -> dict[str, Any]:
-    fields = [
-        {
-            "key": member_field_key(m["id"]),
-            "label": m["label"],
-            "unit": "F",
-            "type": "number",
-            "decimals": 2,
-        }
-        for m in members
-    ]
-    return {"groups": [{"id": "member-forces", "label": "Member Forces", "fields": fields}]}
-
-
-def _build_display_payload(
-    problem_type: str, display: Any
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Geometry + answer schema for one problem slot, keyed by problem type.
-
-    `truss` predates the generator-declared answer schema and still derives its
-    fields from member ids, so it keeps its bespoke path. Every other type is
-    built straight from what the generator declares, which is what lets a new
-    domain plug in without touching this router.
-
-    `type` is pinned to the contract's `number` enum rather than passed through
-    from `AnswerFieldSpec.value_type` -- the generators say `"numeric"`, which
-    is not a value the contract (or the generated TS client) accepts.
-    """
-    if problem_type == "truss":
-        geometry = _build_truss_geometry(display.visual_schema)
-        return geometry, _build_answer_schema(geometry["members"])
-
-    geometry = {
-        "schemaVersion": 1,
-        "elements": [el.model_dump() for el in display.visual_schema],
-    }
-    answer_schema = {
-        "groups": [
-            {
-                "id": "answers",
-                "label": "Answers",
-                "fields": [
-                    {
-                        "key": f.field_id,
-                        "label": f.label,
-                        "unit": f.unit,
-                        "type": "number",
-                        "decimals": 2,
-                    }
-                    for f in display.answer_schema
-                ],
-            }
-        ]
-    }
-    return geometry, answer_schema
 
 
 def _generator_params(ap: AssignmentProblem, index: int) -> dict[str, Any]:
@@ -588,7 +447,7 @@ async def get_problem(
             "correctAnswers": None,
         }
 
-    geometry, answer_schema = _build_display_payload(ap.problem_type, display)
+    geometry, answer_schema = build_display_payload(ap.problem_type, display)
     field_keys = [f["key"] for g in answer_schema["groups"] for f in g["fields"]]
 
     access = problem_access(state, subs)
@@ -673,7 +532,7 @@ async def check_answers(
     display = generator.generate(seed=seed, params=params)
 
     if ap.problem_type == "truss":
-        geometry = _build_truss_geometry(display.visual_schema)
+        geometry = build_truss_geometry(display.visual_schema)
         members = geometry["members"]
 
         # Same seed and same params as generate(), or the student would be graded

@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.assignments import _build_truss_geometry, member_field_key
+from app.services.problem_display import build_truss_geometry, member_field_key
 from app.core.security import hash_password
 from app.db.models import (
     Assignment,
@@ -166,7 +166,7 @@ def _real_answers(sa_seed: int, ap: AssignmentProblem, index: int) -> dict[str, 
     generator = problem_registry.get(ap.problem_type)
     seed = sa_seed + ap.order_index
     params = {"problem_id": index, **(ap.params or {})}
-    geometry = _build_truss_geometry(generator.generate(seed=seed, params=params).visual_schema)
+    geometry = build_truss_geometry(generator.generate(seed=seed, params=params).visual_schema)
     truth = generator.solve(seed=seed, params=params)
     keys = list(truth["member_solutions"].keys())
     return {

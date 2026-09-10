@@ -8,19 +8,14 @@
  * glyph, not the whole diagram.
  */
 
+import type { components } from '@statics/contract/src/index'
+
+export type RigidBodyGeometry = components['schemas']['RigidBodyGeometry']
+export type RawElement = components['schemas']['RigidBodyElement']
+
 export interface Point {
   x: number
   y: number
-}
-
-export interface RawElement {
-  element_type: string
-  properties: Record<string, unknown>
-}
-
-export interface RigidBodyGeometry {
-  schemaVersion: number
-  elements: RawElement[]
 }
 
 export function parseGeometry(geometry: unknown): RawElement[] {

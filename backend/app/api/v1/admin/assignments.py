@@ -12,8 +12,6 @@ from sqlalchemy.orm import selectinload
 from app.api.v1.admin.helpers import (
     _admin_assignment_detail,
     _admin_assignment_summary,
-    _build_answer_schema,
-    _build_truss_geometry,
 )
 from app.db.models import (
     Assignment,
@@ -23,7 +21,9 @@ from app.db.models import (
     Instructor,
 )
 from app.db.session import get_db
+from app.api.v1.assignments import GRADEABLE_TYPES
 from app.problems.registry import problem_registry
+from app.services.problem_display import build_display_payload
 from app.schemas.admin import (
     AssignmentCreateRequest,
     AssignmentUpdateRequest,
@@ -42,6 +42,8 @@ async def list_problem_types(
     """Retrieve catalog of available problem types, display names, and parameter schemas."""
     result: list[dict[str, Any]] = []
     for p_type in problem_registry.list_types():
+        if p_type not in GRADEABLE_TYPES:
+            continue
         gen = problem_registry.get(p_type)
         result.append(
             {
@@ -409,27 +411,7 @@ async def preview_assignment_problem(
     params = {"problem_id": index, **(ap.params or {})}
     display = generator.generate(seed=seed, params=params)
 
-    if ap.problem_type == "truss":
-        geometry = _build_truss_geometry(display.visual_schema)
-        answer_schema = _build_answer_schema(geometry["members"])
-    else:
-        geometry = {"nodes": [], "members": [], "supports": [], "forces": [], "bounds": {}}
-        answer_schema = {
-            "groups": [
-                {
-                    "label": "Answers",
-                    "fields": [
-                        {
-                            "name": f.field_id,
-                            "label": f.label,
-                            "type": f.value_type,
-                            "unit": f.unit,
-                        }
-                        for f in display.answer_schema
-                    ],
-                }
-            ]
-        }
+    geometry, answer_schema = build_display_payload(ap.problem_type, display)
 
     return {
         "schemaVersion": 1,

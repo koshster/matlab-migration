@@ -78,8 +78,9 @@ async def test_problem_types_catalogue_lists_all_generators(admin_client: AsyncC
     types = resp.json()
     type_names = {t["problemType"] for t in types}
     assert "truss" in type_names
-    assert "beam" in type_names
     assert "rigid_body" in type_names
+    # beam is registered but not gradeable — hidden from the builder (Part 1b)
+    assert "beam" not in type_names
 
     truss_info = next(t for t in types if t["problemType"] == "truss")
     assert truss_info["displayName"] == "Planar truss"
