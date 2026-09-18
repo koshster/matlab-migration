@@ -5,6 +5,7 @@ import {
   useAssignmentAnalytics,
 } from '../api/hooks'
 import StatusBadge from '../components/StatusBadge'
+import { buildCanvasCsv } from './gradebookExport'
 
 /**
  * Gradebook and summary analytics for one assignment.
@@ -122,6 +123,24 @@ export default function GradesTab({ courseId }: { courseId: string }) {
             </option>
           ))}
         </select>
+        <button
+          disabled={!gradebook}
+          onClick={() => {
+            if (!gradebook) return
+            const csv = buildCanvasCsv({ title: gradebook.title, rows: gradebook.rows })
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+            const url = URL.createObjectURL(blob)
+            const a = Object.assign(document.createElement('a'), {
+              href: url,
+              download: `${gradebook.slug ?? gradebook.title}-grades.csv`,
+            })
+            a.click()
+            URL.revokeObjectURL(url)
+          }}
+          className="ml-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40"
+        >
+          Export CSV
+        </button>
       </div>
 
       {analytics && (
